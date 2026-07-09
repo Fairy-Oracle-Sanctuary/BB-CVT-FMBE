@@ -973,6 +973,69 @@
             }
             const matrix2FMBEAngles = matrix2FMBEAngles_ZXY;
 
+            // ---- 2D平面辅助函数 ----
+            function generateRectParams(a, b) {
+                // a = Z轴方向长度（长），b = X轴方向宽度
+                let extend_yrot, scale, l1;
+                if (a > b) {
+                    extend_yrot = 90;
+                    scale = a;
+                    l1 = b / a;
+                } else if (b > a) {
+                    extend_yrot = 0;
+                    scale = b;
+                    l1 = a / b;
+                } else {
+                    extend_yrot = 90;
+                    scale = a;
+                    l1 = 1;
+                }
+                const extend_scale = 0.0001;
+                const extend_xrot_rad = -Math.asin(Math.min(Math.max(l1, -1), 1));
+                const extend_xrot = rad2deg(extend_xrot_rad);
+                const xrot_align = (90 - extend_xrot) * Math.cos(extend_yrot * Math.PI / 180);
+                const zrot_align = (90 + extend_xrot) * Math.sin(extend_yrot * Math.PI / 180);
+                
+                const round6 = (v) => Math.round(v * 1e6) / 1e6;
+                
+                return {
+                    extend_yrot: extend_yrot,
+                    scale: round6(scale),
+                    l1: round6(l1),
+                    extend_scale: round6(extend_scale),
+                    extend_xrot: round6(extend_xrot),
+                    xrot: round6(xrot_align),
+                    zrot: round6(zrot_align)
+                };
+            }
+
+            function buildAlignMatrix(params) {
+                const xr = deg2rad(params.xrot);
+                const zr = deg2rad(params.zrot);
+                if (Math.abs(params.extend_yrot) < 1) {
+                    // extend_yrot == 0: Rx(xrot_align)
+                    return [
+                        [1, 0, 0],
+                        [0, Math.cos(xr), -Math.sin(xr)],
+                        [0, Math.sin(xr), Math.cos(xr)]
+                    ];
+                } else {
+                    // extend_yrot == 90: Rz(zrot_align)
+                    return [
+                        [Math.cos(zr), -Math.sin(zr), 0],
+                        [Math.sin(zr), Math.cos(zr), 0],
+                        [0, 0, 1]
+                    ];
+                }
+            }
+
+            function multiplyMatrices(A, B) {
+                const result = [[0,0,0],[0,0,0],[0,0,0]];
+                for (let r=0; r<3; r++) for (let c=0; c<3; c++)
+                    result[r][c] = A[r][0]*B[0][c] + A[r][1]*B[1][c] + A[r][2]*B[2][c];
+                return result;
+            }
+
             function parseVec3(arr) {
                 if (!Array.isArray(arr) || arr.length !== 3) return { valid: false, x: 0, y: 0, z: 0 };
                 const x = Number(arr[0]), y = Number(arr[1]), z = Number(arr[2]);
@@ -1088,11 +1151,19 @@
                 let hasZYEqual = false;
                 let hasIncompatible = false;
                 let totalCubes = 0;
+                let has2DPlanes = false;
+                let planeCubeCount = 0;
                 
                 for (const bone of bones) {
                     for (const cube of bone.cubes) {
                         totalCubes++;
                         const [sx, sy, sz] = cube.size;
+                        // 检测2D平面（y尺寸为0）
+                        if (Math.abs(sy) <= EPS) {
+                            has2DPlanes = true;
+                            planeCubeCount++;
+                            continue; // 2D平面不参与底面检测
+                        }
                         const xzEqual = Math.abs(sx - sz) <= EPS;
                         if (!xzEqual) {
                             allXZEqual = false;
@@ -1116,6 +1187,7 @@
                 for (const bone of bones) {
                     for (const cube of bone.cubes) {
                         const [sx, sy, sz] = cube.size;
+                        if (Math.abs(sy) <= EPS) continue; // 跳过2D平面
                         const xzEqual = Math.abs(sx - sz) <= EPS;
                         if (!xzEqual) {
                             const xyEqual = Math.abs(sx - sy) <= EPS;
@@ -1133,7 +1205,9 @@
                     allXZEqual, 
                     typeDesc,
                     specialCubeCount,
-                    totalCubes
+                    totalCubes,
+                    has2DPlanes,
+                    planeCubeCount
                 };
             }
 
@@ -1154,11 +1228,61 @@
             // ---- 预处理并显示版本卡片 ----
             function processAndShowVersionCard(bones) {
                 const analysis = analyzeCubes(bones);
-                const { needExMode, hasXYEqual, hasZYEqual, hasIncompatibleCubes, allXZEqual, typeDesc, specialCubeCount, totalCubes } = analysis;
+                const { needExMode, hasXYEqual, hasZYEqual, hasIncompatibleCubes, allXZEqual, typeDesc, specialCubeCount, totalCubes, has2DPlanes, planeCubeCount } = analysis;
                 
                 versionCard.style.display = 'block';
                 const normalBtn = document.querySelector('.version-btn[data-version="3"]');
                 
+                // ---- 检测2D平面 ----
+                if (has2DPlanes) {
+                    let desc = `检测到 ${planeCubeCount} 个2D平面方块（厚度为0）。<br>普通版无法处理此类方块，需要使用 ex 版进行特殊换算。`;
+                    desc += '<br><br><strong>普通版</strong>：将跳过这些2D平面方块。<br><strong>ex 版</strong>：可通过特殊换算处理这些2D平面。';
+                    
+                    if (currentVersion !== 3) {
+                        if (normalBtn) normalBtn.classList.add('disabled');
+                        versionBtns.forEach(btn => {
+                            if (btn.dataset.version == currentVersion) {
+                                btn.classList.add('active');
+                            } else {
+                                btn.classList.remove('active');
+                            }
+                        });
+                        // 还要继续往下检查 ex-mode 需求
+                    } else {
+                        // 当前是v3，需要弹窗询问
+                        showVersionChoiceDialog(
+                            '⚠️ 检测到2D平面',
+                            desc,
+                            function() {
+                                // 停留在普通版
+                                if (normalBtn) normalBtn.classList.remove('disabled');
+                                currentVersion = 3;
+                                versionBtns.forEach(btn => {
+                                    if (btn.dataset.version == '3') {
+                                        btn.classList.add('active');
+                                    } else {
+                                        btn.classList.remove('active');
+                                    }
+                                });
+                                showInfoDialog('提示', '您选择了普通版。转换时将跳过 ' + planeCubeCount + ' 个2D平面方块，其余部分正常转换。');
+                            },
+                            function() {
+                                // 切换到 ex 公版
+                                if (normalBtn) normalBtn.classList.add('disabled');
+                                const exBtn = document.querySelector('.version-btn[data-version="0"]');
+                                if (exBtn) {
+                                    exBtn.classList.add('active');
+                                    if (normalBtn) normalBtn.classList.remove('active');
+                                    currentVersion = 0;
+                                }
+                                showInfoDialog('版本切换', '已切换到 ex 公版，2D平面方块将通过特殊换算处理。');
+                            }
+                        );
+                        return; // 弹窗已显示，不再执行后续ex-mode检测
+                    }
+                }
+                
+                // ---- 检测 ex 模式需求（底面非正方形） ----
                 if (needExMode) {
                     let desc = `检测到 ${specialCubeCount} 个 cube 的底面不是正方形（x ≠ z），其中检测到 ${typeDesc} 的尺寸特征。`;
                     if (hasIncompatibleCubes) {
@@ -1210,7 +1334,7 @@
                         }
                     );
                 } else {
-                    if (normalBtn) normalBtn.classList.remove('disabled');
+                    if (!has2DPlanes && normalBtn) normalBtn.classList.remove('disabled');
                     if (currentVersion === 3) {
                         versionBtns.forEach(btn => {
                             if (btn.dataset.version == '3') {
@@ -1272,12 +1396,19 @@
                             const [sx,sy,sz] = cube.size;
                             if (sx <= EPS || sy < 0 || sz <= EPS) { warnings += `方块${cube_id}：尺寸必须为非负数，已跳过\n`; continue; }
 
+                            const is2DPlane = Math.abs(sy) <= EPS;
                             const isNormal = (currentVersion === 3);
                             const xzEqual = Math.abs(sx - sz) <= EPS;
                             const xyEqual = Math.abs(sx - sy) <= EPS;
                             const zyEqual = Math.abs(sz - sy) <= EPS;
 
-                            if (isNormal) {
+                            if (is2DPlane) {
+                                if (isNormal) {
+                                    warnings += `方块${cube_id}：2D平面（厚度为0），普通版无法处理，已跳过\n`;
+                                    continue;
+                                }
+                                // ex版可以处理2D平面
+                            } else if (isNormal) {
                                 if (!xzEqual) {
                                     warnings += `方块${cube_id}：普通版要求底面为正方形（x和z尺寸相等），已跳过\n`;
                                     continue;
@@ -1327,6 +1458,19 @@
                                 finalRotMatrix = R;
                             } else { finalRotMatrix = cubeRotMatrix || [[1,0,0],[0,1,0],[0,0,1]]; }
 
+                            // ---- 2D平面处理：合成摆正矩阵 ----
+                            let rectParams = null;
+                            if (is2DPlane) {
+                                const a = sz;  // Z轴方向长度
+                                const b = sx;  // X轴方向宽度
+                                rectParams = generateRectParams(a, b);
+                                const R_align = buildAlignMatrix(rectParams);
+                                // R_final = R_model × R_align
+                                finalRotMatrix = multiplyMatrices(finalRotMatrix, R_align);
+                                // 2D平面厚度设为0.001，basepos需基于实际渲染尺寸计算
+                                e_scale = MIN_E_SCALE;
+                            }
+
                             const angles = matrix2FMBEAngles(finalRotMatrix);
                             let fmbe_rx = angles.rx;
                             let fmbe_ry = -angles.ry;
@@ -1345,17 +1489,45 @@
                                 Rinv[1][0]*offset_world[0] + Rinv[1][1]*offset_world[1] + Rinv[1][2]*offset_world[2],
                                 Rinv[2][0]*offset_world[0] + Rinv[2][1]*offset_world[1] + Rinv[2][2]*offset_world[2]
                             ];
-                            const factorBase = (currentVersion===3)?16:1;
-                            let xbasepos = -offset_local[0]/scale * factorBase/k;
-                            let ybasepos =  offset_local[1]/e_scale * factorBase/k;
-                            let zbasepos =  offset_local[2]/scale * factorBase/k;
-
+                   const factorBase = (currentVersion===3)?16:1;
+// ---- 提前定义版本标记 ----
+const isExVersion = (currentVersion === 0 || currentVersion === 1);
+const needExSpecial = !xzEqual && (xyEqual || zyEqual);
+// ---- 根据 ex 特殊情况调整分母 ----
+let denomX = scale;
+let denomY = e_scale;
+let denomZ = scale;
+if (isExVersion && needExSpecial) {
+    if (xyEqual) {
+        // xy相等：底面边长 = sy，高 = sz
+        denomX = sy / k;
+        denomY = sy / k;
+        denomZ = sz / k;
+    } else if (zyEqual) {
+        // zy相等：底面边长 = sy，高 = sx
+        denomX = sx / k;
+        denomY = sy / k;
+        denomZ = sy / k;
+    }
+}
+// ---- 2D平面修正分母：使用实际渲染尺寸（长边）而非sx/sz ---- 
+if (is2DPlane && rectParams) {
+    const planeScale = rectParams.scale / k;
+    denomX = planeScale;
+    denomZ = planeScale;
+    // ybasepos 保留正常 cube 处理逻辑，后续再除以 0.001
+}
+let xbasepos = -offset_local[0]/denomX * factorBase/k;
+let ybasepos =  offset_local[1]/denomY * factorBase/k;
+let zbasepos =  offset_local[2]/denomZ * factorBase/k;
+if (is2DPlane && rectParams) {
+    ybasepos /= MIN_E_SCALE;
+    ybasepos *= 12.5;
+} 
                             let cubeDataCode = "";
                             const normalBtnCheck = document.querySelector('.version-btn[data-version="3"]');
                             const isNormalDisabled = normalBtnCheck && normalBtnCheck.classList.contains('disabled');
-                            const isExVersion = (currentVersion === 0 || currentVersion === 1);
-                            const needExSpecial = !xzEqual && (xyEqual || zyEqual);
-
+                            
                             if (dynamicMode) {
                                 let safeBone = safeBoneName(bone.name);
                                 let finalMatrixLines = [];
@@ -1396,112 +1568,134 @@
                                 let d_local_y = `(v.F1)*${offset_world[0]} + (v.F4)*${offset_world[1]} + (v.F7)*${offset_world[2]}`;
                                 let d_local_z = `(v.F2)*${offset_world[0]} + (v.F5)*${offset_world[1]} + (v.F8)*${offset_world[2]}`;
                                 let xbaseposExpr = `- (${d_local_x}) / ${scale} * ${factorBase/k}`;
-                                let ybaseposExpr = `(${d_local_y}) / ${e_scale} * ${factorBase/k}`;
+let ybaseposExpr = `(${d_local_y}) / ${e_scale} * ${factorBase/k}`;
+if (is2DPlane && rectParams) {
+    ybaseposExpr = `(${ybaseposExpr}) / ${MIN_E_SCALE} * 12.5`;
+}
                                 let zbaseposExpr = `(${d_local_z}) / ${scale} * ${factorBase/k}`;
 
                                 if (isExVersion && needExSpecial) {
                                     let extendYrotVal = xyEqual ? 90 : (zyEqual ? 0 : 0);
-                                    let mVal = xyEqual ? sy : (zyEqual ? sy : 0);
-                                    let hVal = xyEqual ? sz : (zyEqual ? sx : 0);
+                                    let mVal = xyEqual ? sy/k : (zyEqual ? sy/k : 0);
+                                    let hVal = xyEqual ? sz/k : (zyEqual ? sx/k : 0);
                                     if (mVal <= EPS || hVal <= EPS) { mVal = scale; hVal = e_scale; }
                                     let extendScaleVal = mVal / hVal;
                                     let scaleVal = mVal / extendScaleVal;
                                     if (currentVersion === 0) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
                                             `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.scale=${formatNum(scaleVal)}; v.extend_scale=${formatNum(extendScaleVal)};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.scale=${formatNum(scaleVal)}; v.extend_scale=${formatNum(extendScaleVal)}; ` +
                                             `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};`;
                                     } else if (currentVersion === 1) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
                                             `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.scale=${formatNum(mVal)}; v.high=${formatNum(hVal)};\n` +
-                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.scale=${formatNum(mVal)}; v.high=${formatNum(hVal)}; ` +
+                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr}; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     }
                                 } else {
                                     if (currentVersion === 0) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
                                             `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.scale=${formatNum(scale)}; v.extend_scale=${formatNum(e_scale / Math.sqrt(scale*e_scale))};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.scale=${formatNum(scale)}; v.extend_scale=${formatNum(e_scale / Math.sqrt(scale*e_scale))}; ` +
                                             `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};`;
                                     } else if (currentVersion === 1) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
                                             `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)};\n` +
-                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
+                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr}; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     } else if (currentVersion === 2) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)};\n` +
-                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};\n` +
-                                            `v.rotatex=0; v.rotatey=0; v.rotatez=0;\n` +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
+                                            `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr}; ` +
+                                            `v.rotatex=0; v.rotatey=0; v.rotatez=0; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     } else if (currentVersion === 3) {
-                                        cubeDataCode = finalMatrixLines.join('\n') + '\n' +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr};\n` +
-                                            `v.xzscale=${formatNum(scale)}; v.yscale=${formatNum(e_scale)};\n` +
+                                        cubeDataCode = finalMatrixLines.join(' ') + ' ' +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${rxExpr}; v.yrot=${ryExpr}; v.zrot=${rzExpr}; ` +
+                                            `v.xzscale=${formatNum(scale)}; v.yscale=${formatNum(e_scale)}; ` +
                                             `v.xbasepos=${xbaseposExpr}; v.ybasepos=${ybaseposExpr}; v.zbasepos=${zbaseposExpr};   v.scale=1;`;
                                     }
                                 }
                             } else {
-                                if (isExVersion && needExSpecial) {
+                                if (is2DPlane && rectParams) {
+                                    // ---- 2D平面特殊处理 ----
+                                    const planeScale = rectParams.scale / k;
+                                    const planeExtScale = rectParams.extend_scale;
+                                    if (currentVersion === 0) {
+                                        cubeDataCode = `v.extend_xrot=${formatNum(rectParams.extend_xrot)};v.extend_yrot=${rectParams.extend_yrot};` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(planeScale)}; v.extend_scale=${formatNum(planeExtScale)}; ` +
+                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};`;
+                                    } else if (currentVersion === 1) {
+                                        const highVal = planeExtScale * rectParams.scale / k;
+                                        cubeDataCode = `v.extend_xrot=${formatNum(rectParams.extend_xrot)};v.extend_yrot=${rectParams.extend_yrot};` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(planeScale)}; v.high=${formatNum(highVal)}; ` +
+                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
+                                            `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
+                                    }
+                                } else if (isExVersion && needExSpecial) {
                                     let extendYrotVal = xyEqual ? 90 : (zyEqual ? 0 : 0);
-                                    let mVal = xyEqual ? sy : (zyEqual ? sy : 0);
-                                    let hVal = xyEqual ? sz : (zyEqual ? sx : 0);
+                                    let mVal = xyEqual ? sy/k : (zyEqual ? sy/k : 0);
+                                    let hVal = xyEqual ? sz/k : (zyEqual ? sx/k : 0);
                                     if (mVal <= EPS || hVal <= EPS) { mVal = scale; hVal = e_scale; }
                                     let extendScaleVal = mVal / hVal;
                                     let scaleVal = mVal / extendScaleVal;
                                     if (currentVersion === 0) {
                                         cubeDataCode = `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.scale=${formatNum(scaleVal)}; v.extend_scale=${formatNum(extendScaleVal)};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(scaleVal)}; v.extend_scale=${formatNum(extendScaleVal)}; ` +
                                             `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};`;
                                     } else if (currentVersion === 1) {
                                         cubeDataCode = `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.scale=${formatNum(mVal)}; v.high=${formatNum(hVal)};\n` +
-                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(mVal)}; v.high=${formatNum(hVal)}; ` +
+                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     }
                                 } else {
                                     if (currentVersion === 0) {
                                         const ext = e_scale / Math.sqrt(scale*e_scale);
                                         cubeDataCode = `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.scale=${formatNum(scale)}; v.extend_scale=${formatNum(ext)};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(scale)}; v.extend_scale=${formatNum(ext)}; ` +
                                             `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};`;
                                     } else if (currentVersion === 1) {
                                         cubeDataCode = `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)};\n` +
-                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};\n` +
+                                            `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
+                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     } else if (currentVersion === 2) {
-                                        cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)};\n` +
-                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};\n` +
-                                            `v.rotatex=0; v.rotatey=0; v.rotatez=0;\n` +
+                                        cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
+                                            `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
+                                            `v.rotatex=0; v.rotatey=0; v.rotatez=0; ` +
                                             `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
                                     } else if (currentVersion === 3) {
-                                        cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)};\n` +
-                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)};\n` +
-                                            `v.xzscale=${formatNum(scale)}; v.yscale=${formatNum(e_scale)};\n` +
+                                        cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
+                                            `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
+                                            `v.xzscale=${formatNum(scale)}; v.yscale=${formatNum(e_scale)}; ` +
                                             `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};   v.scale=1;`;
                                     }
                                 }
@@ -1812,7 +2006,7 @@
                 jsonInputEl.dispatchEvent(new Event('input', {bubbles:true}));
             }
 
-            console.log('BB转FMBE转换器 v8.5 已加载');
+            console.log('BB转FMBE转换器 v8.6 已加载');
         });
     </script>
 </body>
