@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BB转FMBE命令之转换器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         
         * {
@@ -34,8 +35,8 @@
             --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
             --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
             --shadow-lg: 0 8px 24px rgba(56, 156, 255, 0.15);
-            --transition-normal: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             --purple-start: #8b5cf6;
             --purple-end: #c4b5fd;
         }
@@ -54,8 +55,9 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-            opacity: 0.4;
+            background-image: radial-gradient(circle at 30px 30px, rgba(255,255,255,0.15) 2px, transparent 2px);
+            background-size: 60px 60px;
+            opacity: 0.5;
             z-index: 0;
             pointer-events: none;
         }
@@ -76,6 +78,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            will-change: transform;
         }
         .header h1 {
             color: white;
@@ -106,6 +109,7 @@
             box-shadow: var(--shadow-sm);
             animation: fadeInUp 0.6s ease forwards;
             opacity: 0;
+            will-change: transform, opacity;
         }
         .card:nth-child(1) { animation-delay: 0.1s; }
         .card:nth-child(2) { animation-delay: 0.2s; }
@@ -630,6 +634,16 @@
             padding: 8px 16px;
             flex: 0 0 auto;
         }
+        .file-btn:hover {
+            border-color: var(--primary-light);
+            transform: translateY(-2px) skewX(var(--skew-angle));
+            box-shadow: var(--shadow-sm);
+        }
+        .drop-highlight {
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 4px rgba(56, 156, 255, 0.2) !important;
+            background: #f0f7ff !important;
+        }
         .file-name {
             color: var(--text-secondary);
             font-size: 14px;
@@ -642,10 +656,12 @@
             transition: opacity 0.3s ease, visibility 0.3s ease;
             opacity: 0;
             visibility: hidden;
+            pointer-events: none;
         }
         #tutorialOverlay.show {
             opacity: 1;
             visibility: visible;
+            pointer-events: auto;
         }
         #tutorialOverlay .tutorial-content {
             transform: translateY(30px) skewX(var(--skew-angle));
@@ -734,6 +750,145 @@
         .dialog-btn.cancel:hover {
             background: #cbd5e1;
         }
+        /* ---- 折叠更新日志样式 ---- */
+        .changelog-card {
+            margin-top: 20px;
+            animation: fadeIn 0.6s ease forwards;
+            animation-delay: 0.8s;
+            opacity: 0;
+        }
+        .changelog-toggle {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: var(--border-radius-md);
+            background: var(--card-bg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transition: var(--transition-normal);
+            font-family: inherit;
+        }
+        .changelog-toggle:hover {
+            border-color: var(--primary-light);
+            color: var(--text-main);
+            box-shadow: var(--shadow-sm);
+        }
+        .changelog-toggle .toggle-arrow {
+            font-size: 14px;
+            transition: transform 0.3s ease;
+        }
+        .changelog-toggle .toggle-arrow.open {
+            transform: rotate(180deg);
+        }
+        .changelog-body {
+            margin-top: 8px;
+            border-radius: var(--border-radius-md);
+            background: var(--card-bg);
+            border: 1.5px solid #e2e8f0;
+            padding: 16px 20px;
+            display: none;
+            box-shadow: var(--shadow-sm);
+        }
+        .changelog-body.open {
+            display: block;
+        }
+        .changelog-body .footer-note-inner {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .changelog-body .footer-note-inner .sep-line {
+            text-align: center;
+            color: var(--text-hint);
+            margin: 12px 0;
+            letter-spacing: 2px;
+        }
+        .changelog-body .footer-note-inner .contact-line {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 13px;
+        }
+        .changelog-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+        }
+        .changelog-entry:last-child {
+            border-bottom: none;
+        }
+        .changelog-entry .entry-date {
+            font-weight: 600;
+            color: var(--primary);
+            white-space: nowrap;
+            font-size: 13px;
+            min-width: 90px;
+        }
+        .changelog-entry .entry-version {
+            font-weight: 700;
+            color: var(--purple-start);
+            white-space: nowrap;
+            font-size: 13px;
+            min-width: 50px;
+        }
+        .changelog-entry .entry-desc {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .changelog-entry .entry-desc br {
+            display: none;
+        }
+        .changelog-entry .entry-desc br + br {
+            display: inline;
+        }
+        .changelog-add-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 10px;
+            padding: 6px 14px;
+            border: 1.5px dashed #cbd5e1;
+            border-radius: var(--border-radius-sm);
+            background: transparent;
+            color: var(--text-hint);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            font-family: inherit;
+        }
+        .changelog-add-btn:hover {
+            border-color: var(--primary-light);
+            color: var(--primary);
+            background: #f8faff;
+        }
+        /* ---- 公告（在更新日志内部） ---- */
+        .changelog-announcement {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border: 1.5px solid #93c5fd;
+            border-radius: var(--border-radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 8px;
+        }
+        .changelog-announcement-header {
+            font-weight: 700;
+            font-size: 15px;
+            color: #1e40af;
+            margin-bottom: 6px;
+        }
+        .changelog-announcement-body {
+            font-size: 14px;
+            color: #1e3a5f;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -759,58 +914,30 @@
 <div class="card" id="versionCard" style="display: none;">
     <div class="card-header"><span class="icon">🧩</span><span class="title">版本选择</span></div>
     <div class="version-group" id="versionGroup">
-        <div class="version-btn" data-version="0"><span>ex公版</span><div class="version-tooltip">未经过修改的<br>ex（高级版fmbe）</div></div>
-        <div class="version-btn" data-version="1"><span>ex米版</span><div class="version-tooltip">（高级版底层未改）<br>使用v.high简洁的表示高的数值，单位为米</div></div>
-        <div class="version-btn" data-version="2" style="opacity:0.5;cursor:not-allowed;pointer-events:none;"><span>开发中…</span><div class="version-tooltip">ui预留<br>（为特殊版本的fmbe预留的ui）<br>不支持成转换为该版本</div></div>
-        <div class="version-btn active" data-version="3"><span>普通版</span><div class="version-tooltip">普通版<br>使用xzscale、yscale描述底和高</div></div>
+        <div class="version-btn active" data-version="0"><span>ex公版</span><div class="version-tooltip">未经过修改的<br>ex（高级版fmbe）<br>默认版本</div></div>
     </div>
 </div>
 <!-- ===== 版本选择卡片结束 ===== -->
 <div class="main-btn-group"><button class="primary-btn" id="convertBtn"><span>转换</span></button></div>
-<div class="hint-bar"><span class="icon">⚠️</span><span class="text">cube须底面为<span style="color:red;">正方形</span></span></div>
+<div class="hint-bar"><span class="icon">⚠️</span><span class="text">cube <strong>底面</strong> 须为<strong style="color:red">正方形</strong></span></div>
         <div id="errorMsg" class="error-box" style="display: none;"></div>
         <div class="card output-card" id="outputGroup" style="display: none;">
             <div class="output-header"><div class="output-title"><span class="icon">📦</span><span>转换输出</span></div><button class="cube-copy-btn" id="copyAllBtn">📁 导出命令文件</button></div>
             <div class="output-wrapper"><div class="output-box" id="outputText"></div></div>
         </div>
-        <div class="footer-note">
-            注：数值经过转换，结果可直接用于对应版本的FMBE<br>——————————<br>更新日志:
-            <br>2026/2/20 b0适配普通版<br>
-            2026/2/21 v.1 新添加了选择版本时，对版本的简概描述<br>
-            移出〈前置旋转矩阵〉版本fmbe<br>修复错别字<br>
-            2026/2/22 v.2 新增单方块独立复制按钮，修复版本选择与转换功能bug<br>
-            2026/2/23 v.2.1修复数据不显示问题<br>
-            2026/2/24 v.3 新增触手型关键帧动画转换实验性功能，支持多父骨骼。
-            <br>v.3-b2修复换算系数k≠1时，basepos的计算错误问题<br>
-            <br>2026/2/25 v.3-b3 修复h=0兼容、（yscale、extend_scale）high=NaN问题<br
-            >x轴镜像问题<br>2026/2/25 v.3-b4 修复了关键帧动画所有basepos和rot<br
-            >正负符号错误的问题，添加了bug<br
-            >2026/2/25 v.3-b5 修复公版输出的basepos数据错误bug<br>
-            2026/2/25 v.3-b6 实验内容：支持cube存在一级以上父骨骼<br>
-            2026/2/27 v.4-b1 新增补全molang前后指令功能<br>
-            2026/2/28 v.4-b2 修复rot取反问题，增加了bug<br>
-            2026/2/28 v.4-b3 增加文件功选择功能<br>
-            2026/2/29 v.4-b4 修复了普通版scale输出格式漏掉v.的问题<br>
-            2026/3/1 v.4-b5 修复了动画转换器无法使用问题<br>
-            2026/3/1 v.4-b6 修复了|xrot|>90时输出滚木的问题<br>
-            2026/3/3 v.5-b1及b2 尝试修复rot三轴同时有值的换算错误<br>
-            2026/3/5 v.5-b3 已解决rot换算错误问题<br>
-            2026/3/5 v.6 优化复制格式； 2026/3/6 v.6-b1 增加&<>调用方块编号功能<br>
-            2026/3/7 v.6-b2 彻底移除动画转换UI及骨骼延伸长度<br>
-            2026/3/7 v.6-b3 添加简单教程<br>
-            2026/3/7 v.7 新增模型多父骨骼转换功能（静态模型）<br>
-            2026/3/8 v.7.1 修复无父骨骼xbasepos取反问题<br>
-            2026/3/8 v.7.2 修复无pivot块，错误赋值为骨骼旋转中心的问题<br>
-            2026/3/10 v.7.3 修复“祈祷不出bug”无效的问题 <br>
-            2026/3/14 v.8.0 新增模型多父骨骼绑定功能（旋转矩阵） <br>
-            2026/3/15 v.8.2 补全exr和eyr<br>
-            2026/4/11 v.8.3 完善欧拉角死锁问题<br>
-            2026/7/1 v.8.4 重写ex版的转换逻辑、版本选择逻辑<br>
-            2026/7/1 v.8.5 优化命令导出功能<br>
-            2026/7/5 v.8.6 支持ex版特殊解转换<br>
-            2026/7/12 v.8.7修复欧拉角万向节死锁分支<br>
-            ——————————<br>😭出现bug请联系<br>小E（QQ号3155929574）。
+        <!-- ===== 折叠更新日志 ===== -->
+        <div class="changelog-card">
+            <button class="changelog-toggle" id="changelogToggleBtn">
+                <span>📜 更新日志</span>
+                <span class="toggle-arrow" id="changelogArrow">▼</span>
+            </button>
+            <div class="changelog-body" id="changelogBody">
+                <div class="footer-note-inner" id="changelogContent">
+                    <!-- 由 JavaScript 动态渲染 -->
+                </div>
+            </div>
         </div>
+        <!-- ===== 折叠更新日志结束 ===== -->
     </div>
     <div id="tutorialOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;">
         <div class="tutorial-content" style="background: var(--card-bg); border-radius: var(--border-radius-lg); padding: 24px; max-width: 500px; width: 90%; box-shadow: var(--shadow-lg);">
@@ -838,17 +965,7 @@
             <div class="dialog-buttons"><button class="dialog-btn confirm" id="infoDialogOk">知道了</button></div>
         </div></div>
     </div>
-    <!-- ===== 版本选择对话框（双按钮） ===== -->
-    <div id="versionChoiceDialog" class="dialog-overlay">
-        <div class="dialog-box"><div>
-            <div class="dialog-title" id="versionChoiceTitle">⚠️ 检测到尺寸异常</div>
-            <div class="dialog-desc" id="versionChoiceDesc">检测到部分 cube 的底面不是正方形（x ≠ z），普通版将跳过这些 cube。ex 版可通过特殊换算处理它们。</div>
-            <div class="dialog-buttons">
-                <button class="dialog-btn cancel" id="versionChoiceStay">仍使用普通版</button>
-                <button class="dialog-btn confirm" id="versionChoiceSwitch">切换到 ex 版</button>
-            </div>
-        </div></div>
-    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const M_PI = Math.PI;
@@ -879,17 +996,10 @@
         const infoDialogOk = document.getElementById('infoDialogOk');
 
         const versionCard = document.getElementById("versionCard");
-        const versionChoiceDialog = document.getElementById('versionChoiceDialog');
-        const versionChoiceTitle = document.getElementById('versionChoiceTitle');
-        const versionChoiceDesc = document.getElementById('versionChoiceDesc');
-        const versionChoiceStay = document.getElementById('versionChoiceStay');
-        const versionChoiceSwitch = document.getElementById('versionChoiceSwitch');
 
-        let currentVersion = 3;
+        let currentVersion = 0;
         let tutorialTimer = null;
-        let versionDisabledFlag = false;
         let currentJsonFileName = '';
-        let pendingVersionChoice = null;
 
         // ---- 通用提示对话框 ----
         function showInfoDialog(title, message) {
@@ -903,33 +1013,6 @@
         infoDialogOk.addEventListener('click', hideInfoDialog);
         infoDialog.addEventListener('click', function(e) {
             if (e.target === this) hideInfoDialog();
-        });
-
-        // ---- 版本选择对话框 ----
-        function showVersionChoiceDialog(title, desc, onStay, onSwitch) {
-            versionChoiceTitle.textContent = title;
-            versionChoiceDesc.innerHTML = desc;
-            pendingVersionChoice = { onStay, onSwitch };
-            versionChoiceDialog.classList.add('show');
-        }
-        function hideVersionChoiceDialog() {
-            versionChoiceDialog.classList.remove('show');
-            pendingVersionChoice = null;
-        }
-        versionChoiceStay.addEventListener('click', function() {
-            if (pendingVersionChoice) {
-                pendingVersionChoice.onStay();
-                hideVersionChoiceDialog();
-            }
-        });
-        versionChoiceSwitch.addEventListener('click', function() {
-            if (pendingVersionChoice) {
-                pendingVersionChoice.onSwitch();
-                hideVersionChoiceDialog();
-            }
-        });
-        versionChoiceDialog.addEventListener('click', function(e) {
-            if (e.target === this) hideVersionChoiceDialog();
         });
 
         // ---- 工具函数 ----
@@ -1071,6 +1154,134 @@
         function escapeHTML(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
         function safeBoneName(name) { return name.replace(/[^a-zA-Z0-9_]/g, '_'); }
 
+        // =================================================================
+        // 角度转弧度
+        // =================================================================
+        function degToRad(deg) {
+            return deg * Math.PI / 180;
+        }
+
+        // =================================================================
+        // 方块变换矩阵计算（与 EX 模拟器一致，使用 THREE.Matrix4）
+        //    输入：M = [px, py, pz, rx, ry, rz, s, es, ex, ey, bx, by, bz]
+        //          rotatex, rotatey, rotatez 为全局旋转欧拉角
+        //    返回：THREE.Matrix4 世界变换矩阵
+        // =================================================================
+        function computeTransformMatrix(M, rotatex = 0, rotatey = 0, rotatez = 0) {
+            const [px, py, pz, rx, ry, rz, s, es, ex, ey, bx, by, bz] = M;
+
+            // 局部变换：base 偏移，extend 剪切，缩放，局部旋转
+            const matB   = new THREE.Matrix4().makeTranslation(bx, by, bz);
+            const matEsy = new THREE.Matrix4().makeScale(1, es, 1);
+            const matEyr = new THREE.Matrix4().makeRotationY(-degToRad(-ey));
+            const matExr = new THREE.Matrix4().makeRotationX(-degToRad(ex));
+            const matEs  = new THREE.Matrix4().makeScale(1, 1, es);
+            const matExl = new THREE.Matrix4().makeRotationX(degToRad(ex));
+            const matEyl = new THREE.Matrix4().makeRotationY(degToRad(-ey));
+            const matS   = new THREE.Matrix4().makeScale(s, s, s);
+            const matRx  = new THREE.Matrix4().makeRotationX(degToRad(rx));
+            const matRy  = new THREE.Matrix4().makeRotationY(degToRad(-ry));
+            const matRz  = new THREE.Matrix4().makeRotationZ(degToRad(-rz));
+
+            const localMat = matB.clone();
+            localMat.premultiply(matEsy);
+            localMat.premultiply(matEyr);
+            localMat.premultiply(matExr);
+            localMat.premultiply(matEs);
+            localMat.premultiply(matExl);
+            localMat.premultiply(matEyl);
+            localMat.premultiply(matS);
+            localMat.premultiply(matRz);
+            localMat.premultiply(matRx);
+            localMat.premultiply(matRy);
+
+            // 全局旋转（世界空间）
+            const globalRz = new THREE.Matrix4().makeRotationZ(degToRad(-rotatez));
+            const globalRx = new THREE.Matrix4().makeRotationX(degToRad(rotatex));
+            const globalRy = new THREE.Matrix4().makeRotationY(degToRad(-rotatey));
+            const globalRot = globalRy.clone().multiply(globalRz).multiply(globalRx);
+
+            // 平移枢轴
+            const matP = new THREE.Matrix4().makeTranslation(px, py, pz);
+
+            // 总变换 = T(pos) * 全局旋转 * 局部变换
+            return matP.clone().multiply(globalRot).multiply(localMat);
+        }
+
+        // =================================================================
+        // 从 M 数组生成 FMBE 命令字符串
+        //    M = [xpos, ypos, zpos, xrot, yrot, zrot, scale, extend_scale, extend_xrot, extend_yrot, xbasepos, ybasepos, zbasepos]
+        // =================================================================
+        function generateCommandFromM(M) {
+            const f = (v) => formatNum(v);
+            return `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                   `v.xrot=${f(M[3])}; v.yrot=${f(M[4])}; v.zrot=${f(M[5])}; ` +
+                   `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                   `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                   `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};`;
+        }
+
+        // =================================================================
+        // 获取方块的线性变换矩阵 A (3x3) 及其逆矩阵 Ainv（使用 THREE.Matrix3）
+        // =================================================================
+        function getBlockLinearMatrixAndInverse(M, rotatex = 0, rotatey = 0, rotatez = 0) {
+            const worldMat = computeTransformMatrix(M, rotatex, rotatey, rotatez);
+            const A = new THREE.Matrix3().setFromMatrix4(worldMat);
+            const Ainv = A.clone().invert();
+            return { A, Ainv };
+        }
+
+        // =================================================================
+        // 6. 获取方块的视觉中心（世界坐标）
+        //    从世界变换矩阵提取平移分量
+        //    返回：THREE.Vector3
+        // =================================================================
+        function getBlockCenter(M, rotatex = 0, rotatey = 0, rotatez = 0) {
+            const worldMat = computeTransformMatrix(M, rotatex, rotatey, rotatez);
+            return new THREE.Vector3().setFromMatrixPosition(worldMat);
+        }
+
+        // =================================================================
+        // 7. 核心：移动枢轴 + 补偿 basepos，保持视觉中心不变
+        //    功能：将枢轴在世界空间移动 (dx, dy, dz)，同时自动调整 basepos
+        //          使得方块的视觉中心位置不变。
+        //    参数 dx, dy, dz：枢轴的世界空间位移量（FMBE 坐标系）
+        //    直接修改 M 数组：M[0..2] ← 新枢轴, M[10..12] ← 新 basepos
+        // =================================================================
+        function applyWorldDisplacementWithFixedCenter(M, dx, dy, dz, rotatex = 0, rotatey = 0, rotatez = 0) {
+            // 7.1 固定当前视觉中心（目标锚点）
+            const center = getBlockCenter(M, rotatex, rotatey, rotatez);
+
+            // 7.2 获取线性变换逆矩阵
+            const { Ainv } = getBlockLinearMatrixAndInverse(M, rotatex, rotatey, rotatez);
+
+            // 7.3 读取当前枢轴位置 (xpos, ypos, zpos) 即 M[0..2]
+            const pos = new THREE.Vector3(M[0], M[1], M[2]);
+
+            // 7.4 计算新的枢轴位置：枢轴移动 (dx, dy, dz)
+            const posNew = pos.clone().add(new THREE.Vector3(dx, dy, dz));
+
+            // 7.5 计算补偿向量（世界空间）：diff = center - posNew
+            //     即为了让视觉中心不变，basepos 需要补偿的量
+            const diff = center.clone().sub(posNew);
+
+            // 7.6 ★ 关键步骤：将补偿向量转换到 base 空间 ★
+            //     公式：baseNew = A⁻¹ · diff
+            const baseNew = diff.clone().applyMatrix3(Ainv);
+
+            // 7.7 四舍五入保留 6 位小数防止精度噪声
+            const round6 = (v) => parseFloat(v.toFixed(6));
+
+            // 7.8 写回 M 数组
+            M[0] = round6(posNew.x);   // v.xpos
+            M[1] = round6(posNew.y);   // v.ypos
+            M[2] = round6(posNew.z);   // v.zpos
+
+            M[10] = round6(baseNew.x); // v.xbasepos
+            M[11] = round6(baseNew.y); // v.ybasepos
+            M[12] = round6(baseNew.z); // v.zbasepos
+        }
+
         // ---- 预处理：检测 cube 尺寸 ----
         function analyzeCubes(bones) {
             let allXZEqual = true;
@@ -1129,84 +1340,18 @@
         function applyVersionRestriction(needExMode) {
             const btns = document.querySelectorAll('.version-btn');
             btns.forEach(b => { if (b.dataset.version === '2') { b.classList.add('disabled'); } });
-            const normalBtn = document.querySelector('.version-btn[data-version="3"]');
-            if (normalBtn) {
-                if (needExMode) {
-                    normalBtn.classList.add('disabled');
-                } else {
-                    normalBtn.classList.remove('disabled');
-                }
-            }
         }
 
         function processAndShowVersionCard(bones) {
             const analysis = analyzeCubes(bones);
-            const { needExMode, hasXYEqual, hasZYEqual, hasIncompatibleCubes, allXZEqual, typeDesc, specialCubeCount, totalCubes } = analysis;
+            const { needExMode, hasXYEqual, hasZYEqual, hasIncompatibleCubes, typeDesc, specialCubeCount } = analysis;
 
             versionCard.style.display = 'block';
-            const normalBtn = document.querySelector('.version-btn[data-version="3"]');
 
-            if (needExMode) {
-                let desc = `检测到 ${specialCubeCount} 个 cube 的底面不是正方形（x ≠ z），其中检测到 ${typeDesc} 的尺寸特征。`;
-                if (hasIncompatibleCubes) {
-                    desc += '<br><span style="color:#f59e0b;">⚠️ 注意：部分 cube 的 xy 和 zy 均不相等，ex 版也无法处理，将被跳过。</span>';
-                }
-                desc += '<br><br><strong>普通版</strong>：会跳过这些 cube，只转换底面为正方形的部分。<br><strong>ex 版</strong>：可通过特殊换算处理这些 cube。';
-
-                if (currentVersion !== 3) {
-                    if (normalBtn) normalBtn.classList.add('disabled');
-                    versionBtns.forEach(btn => {
-                        if (btn.dataset.version == currentVersion) {
-                            btn.classList.add('active');
-                        } else {
-                            btn.classList.remove('active');
-                        }
-                    });
-                    return;
-                }
-
-                showVersionChoiceDialog(
-                    '⚠️ 检测到尺寸异常',
-                    desc,
-                    function() {
-                        if (normalBtn) normalBtn.classList.remove('disabled');
-                        currentVersion = 3;
-                        versionBtns.forEach(btn => {
-                            if (btn.dataset.version == '3') {
-                                btn.classList.add('active');
-                            } else {
-                                btn.classList.remove('active');
-                            }
-                        });
-                        showInfoDialog('提示', '您选择了普通版。转换时将跳过底面非正方形的 cube（共 ' + specialCubeCount + ' 个），其余部分正常转换。');
-                    },
-                    function() {
-                        if (normalBtn) normalBtn.classList.add('disabled');
-                        const exBtn = document.querySelector('.version-btn[data-version="0"]');
-                        if (exBtn) {
-                            exBtn.classList.add('active');
-                            if (normalBtn) normalBtn.classList.remove('active');
-                            currentVersion = 0;
-                        }
-                        let msg = '已切换到 ex 公版。';
-                        if (hasXYEqual && hasZYEqual) msg += ' 检测到 xy 和 zy 两种尺寸特征，ex 版将分别使用 v.extend_yrot=90 和 v.extend_yrot=0 处理。';
-                        else if (hasXYEqual) msg += ' 检测到 xy 相等，ex 版将使用 v.extend_yrot=90。';
-                        else if (hasZYEqual) msg += ' 检测到 zy 相等，ex 版将使用 v.extend_yrot=0。';
-                        if (hasIncompatibleCubes) msg += ' 注意：部分 cube 无法被 ex 版处理，将被跳过。';
-                        showInfoDialog('版本切换', msg);
-                    }
-                );
-            } else {
-                if (normalBtn) normalBtn.classList.remove('disabled');
-                if (currentVersion === 3) {
-                    versionBtns.forEach(btn => {
-                        if (btn.dataset.version == '3') {
-                            btn.classList.add('active');
-                        } else {
-                            btn.classList.remove('active');
-                        }
-                    });
-                }
+            if (needExMode && hasIncompatibleCubes) {
+                let msg = `检测到 ${specialCubeCount} 个特殊尺寸 cube（${typeDesc}），`;
+                msg += '但部分 cube xy 和 zy 均不相等，ex 版无法处理，将被跳过。';
+                showInfoDialog('尺寸提示', msg);
             }
         }
 
@@ -1245,23 +1390,14 @@
                         const [sx,sy,sz] = cube.size;
                         if (sx <= EPS || sy < 0 || sz <= EPS) { warnings += `方块${cube_id}：尺寸必须为非负数，已跳过\n`; continue; }
 
-                        const isNormal = (currentVersion === 3);
                         const xzEqual = Math.abs(sx - sz) <= EPS;
                         const xyEqual = Math.abs(sx - sy) <= EPS;
                         const zyEqual = Math.abs(sz - sy) <= EPS;
 
-                        if (isNormal) {
-                            if (!xzEqual) {
-                                warnings += `方块${cube_id}：普通版要求底面为正方形（x和z尺寸相等），已跳过\n`;
-                                continue;
-                            }
-                        } else {
-                            if (!xzEqual) {
-                                if (!(xyEqual || zyEqual)) {
-                                    warnings += `方块${cube_id}：ex版要求底面为正方形（x=z）或高等于其中一个边（x=y或z=y），已跳过\n`;
-                                    continue;
-                                }
-                            }
+                        // 检查尺寸兼容性
+                        if (!xzEqual && !(xyEqual || zyEqual)) {
+                            warnings += `方块${cube_id}：尺寸不兼容（x≠z 且 x≠y 且 z≠y），已跳过\n`;
+                            continue;
                         }
 
                         // ---- 计算中心（考虑cube自身旋转） ----
@@ -1306,7 +1442,6 @@
                         }
 
                         // ---- 提取角度 ----
-                        let fmbe_rx, fmbe_ry, fmbe_rz;
                         function matrix2FMBEAngles(mat) {
                             const r00 = mat[0][0], r01 = mat[0][1], r02 = mat[0][2];
                             const r10 = mat[1][0], r11 = mat[1][1], r12 = mat[1][2];
@@ -1315,7 +1450,6 @@
                             let cosRx = Math.cos(rx);
                             let ry, rz;
                             if (Math.abs(cosRx) < 1e-6) {
-                                // 万向节死锁处理：固定 rz = 0，使用 r02 和 r00 计算 ry
                                 ry = Math.atan2(r02, r00);
                                 rz = 0;
                             } else {
@@ -1328,17 +1462,30 @@
                             return { rx, ry, rz };
                         }
                         const angles = matrix2FMBEAngles(finalRotMatrix);
-                        fmbe_rx = angles.rx;
-                        fmbe_ry = -angles.ry;
-                        fmbe_rz = angles.rz;
 
-                        // ---- 位置和 basepos ----
-                        let worldPivot = cube.has_cube_pivot ? finalCubePivot : finalCenter;
-                        const factorPos = (currentVersion===3)?16:1;
-                        let vx = -worldPivot[0]/k * factorPos;
-                        let vy =  worldPivot[1]/k * factorPos;
-                        let vz =  worldPivot[2]/k * factorPos;
+                        // ---- 构建 M 数组 [xpos, ypos, zpos, xrot, yrot, zrot, scale, extend_scale, extend_xrot, extend_yrot, xbasepos, ybasepos, zbasepos] ----
+                        const M = new Array(13).fill(0);
+                        const worldPivot = cube.has_cube_pivot ? finalCubePivot : finalCenter;
 
+                        // pos (M[0..2])
+                        M[0] = -worldPivot[0] / k;  // v.xpos
+                        M[1] =  worldPivot[1] / k;  // v.ypos
+                        M[2] =  worldPivot[2] / k;  // v.zpos
+
+                        // rot (M[3..5])
+                        M[3] = angles.rx;            // v.xrot
+                        M[4] = -angles.ry;           // v.yrot
+                        M[5] = angles.rz;            // v.zrot
+
+                        // size (M[6..7])
+                        M[6] = scale;                // v.scale
+                        M[7] = e_scale;              // v.extend_scale / v.high
+
+                        // extend (M[8..9])
+                        M[8] = -90;                  // v.extend_xrot（默认）
+                        M[9] = 0;                    // v.extend_yrot（默认）
+
+                        // ---- basepos (M[10..12])：将 center 相对 pivot 的偏移转换到局部空间 ----
                         const offset_world = [finalCenter[0]-worldPivot[0], finalCenter[1]-worldPivot[1], finalCenter[2]-worldPivot[2]];
                         const Rinv = transposeMatrix(finalRotMatrix);
                         const offset_local = [
@@ -1346,87 +1493,42 @@
                             Rinv[1][0]*offset_world[0] + Rinv[1][1]*offset_world[1] + Rinv[1][2]*offset_world[2],
                             Rinv[2][0]*offset_world[0] + Rinv[2][1]*offset_world[1] + Rinv[2][2]*offset_world[2]
                         ];
-
-                        const factorBase = (currentVersion===3)?16:1;
-                        const isExVersion = (currentVersion === 0 || currentVersion === 1);
+                        // 根据尺寸选择归一化分母
+                        let denomX = scale, denomY = e_scale, denomZ = scale;
                         const needExSpecial = !xzEqual && (xyEqual || zyEqual);
+                        if (needExSpecial) {
+                            if (xyEqual)      { denomX = sy/k; denomY = sy/k; denomZ = sz/k; }
+                            else if (zyEqual) { denomX = sx/k; denomY = sy/k; denomZ = sy/k; }
+                        }
+                        M[10] = -offset_local[0] / denomX / k;  // v.xbasepos
+                        M[11] =  offset_local[1] / denomY / k;  // v.ybasepos
+                        M[12] =  offset_local[2] / denomZ / k;  // v.zbasepos
 
-                        let denomX = scale;
-                        let denomY = e_scale;
-                        let denomZ = scale;
-                        if (isExVersion && needExSpecial) {
+                        // ---- ex 特殊尺寸处理 ----
+                        if (needExSpecial) {
+                            M[8] = 0;  // extend_xrot = 0
                             if (xyEqual) {
-                                denomX = sy / k;
-                                denomY = sy / k;
-                                denomZ = sz / k;
+                                M[9] = 90;  // extend_yrot = 90
+                                const mVal = sy / k;
+                                const hVal = sz / k;
+                                const extendScaleVal = mVal / hVal;
+                                M[6] = mVal / extendScaleVal;
+                                M[7] = extendScaleVal;
                             } else if (zyEqual) {
-                                denomX = sx / k;
-                                denomY = sy / k;
-                                denomZ = sy / k;
+                                M[9] = 0;   // extend_yrot = 0
+                                const mVal = sy / k;
+                                const hVal = sx / k;
+                                const extendScaleVal = mVal / hVal;
+                                M[6] = mVal / extendScaleVal;
+                                M[7] = extendScaleVal;
                             }
+                        } else {
+                            // 普通立方体 ex公版：extend_scale = e_scale / sqrt(scale * e_scale)
+                            M[7] = e_scale / Math.sqrt(scale * e_scale);
                         }
 
-
-                        let xbasepos = -offset_local[0]/denomX * factorBase/k;
-                        let ybasepos =  offset_local[1]/denomY * factorBase/k;
-                        let zbasepos =  offset_local[2]/denomZ * factorBase/k;
-
-                        // ---- 生成命令 ----
-                        let cubeDataCode = "";
-                            // ---- 静态模式 ----
-                            if (isExVersion && needExSpecial) {
-                                // ex特殊尺寸处理
-                                let extendYrotVal = xyEqual ? 90 : (zyEqual ? 0 : 0);
-                                let mVal = xyEqual ? sy/k : (zyEqual ? sy/k : 0);
-                                let hVal = xyEqual ? sz/k : (zyEqual ? sx/k : 0);
-                                if (mVal <= EPS || hVal <= EPS) { mVal = scale; hVal = e_scale; }
-                                let extendScaleVal = mVal / hVal;
-                                let scaleVal = mVal / extendScaleVal;
-                                if (currentVersion === 0) {
-                                    cubeDataCode = `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                        `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.scale=${formatNum(scaleVal)}; v.extend_scale=${formatNum(extendScaleVal)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};`;
-                                } else if (currentVersion === 1) {
-                                    cubeDataCode = `v.extend_xrot=0;v.extend_yrot=${extendYrotVal};` +
-                                        `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.scale=${formatNum(mVal)}; v.high=${formatNum(hVal)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
-                                        `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
-                                }
-                            } else {
-                                // 普通立方体 / 普通版
-                                if (currentVersion === 0) {
-                                    const ext = e_scale / Math.sqrt(scale*e_scale);
-                                    cubeDataCode = `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                        `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.scale=${formatNum(scale)}; v.extend_scale=${formatNum(ext)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};`;
-                                } else if (currentVersion === 1) {
-                                    cubeDataCode = `v.extend_xrot=-90;v.extend_yrot=0;` +
-                                        `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
-                                        `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
-                                } else if (currentVersion === 2) {
-                                    cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.scale=${formatNum(scale)}; v.high=${formatNum(e_scale)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)}; ` +
-                                        `v.rotatex=0; v.rotatey=0; v.rotatez=0; ` +
-                                        `v.extend_scale=v.high/math.sqrt(v.scale*v.high);`;
-                                } else if (currentVersion === 3) {
-                                    cubeDataCode = `v.xpos=${formatNum(vx)}; v.ypos=${formatNum(vy)}; v.zpos=${formatNum(vz)}; ` +
-                                        `v.xrot=${formatNum(fmbe_rx)}; v.yrot=${formatNum(fmbe_ry)}; v.zrot=${formatNum(fmbe_rz)}; ` +
-                                        `v.xzscale=${formatNum(scale)}; v.yscale=${formatNum(e_scale)}; ` +
-                                        `v.xbasepos=${formatNum(xbasepos)}; v.ybasepos=${formatNum(ybasepos)}; v.zbasepos=${formatNum(zbasepos)};   v.scale=1;`;
-                                }
-                            }
-
+                        // ---- 从 M 数组生成命令 ----
+                        const cubeDataCode = generateCommandFromM(M);
                         const finalCommand = customPrefix.replace(/&<>/g, cube_id) + cubeDataCode + customSuffix.replace(/&<>/g, cube_id);
                         boneGroups[boneName].commands.push({ id: cube_id, command: finalCommand });
                     }
@@ -1435,7 +1537,7 @@
                 window.__lastConvertedVersion = currentVersion;
                 window.__lastCubeCount = totalCubeCount;
 
-                const versionNames = ["公版","米制版","error！请查看该版本是否存在！","普通版"];
+                const versionNames = ["ex公版"];
                 const titleText = `===== ${versionNames[currentVersion]}转换结果 =====`;
                 let outputHTML = `<div class="output-title-header">${titleText}</div>`;
                 for (const [boneName, group] of Object.entries(boneGroups)) {
@@ -1575,9 +1677,8 @@
                 showInfoDialog('提示', '没有可导出的命令，请先转换模型。');
                 return;
             }
-            const ver = window.__lastConvertedVersion !== undefined ? window.__lastConvertedVersion : currentVersion;
             const cubeCount = window.__lastCubeCount || 0;
-            const versionName = ['ex公版','ex米版','开发中…','普通版'][ver] || '未知版本';
+            const versionName = 'ex公版';
             let baseName = currentJsonFileName || 'FMBE模型';
             const fileName = baseName ? `${baseName}_${versionName}_${cubeCount}块` : `${versionName}_FMBE模型文件_${cubeCount}块`;
             const finalName = fileName + '.txt';
@@ -1613,10 +1714,8 @@
             }
         });
 
-        // ---- 上传文件 ----
-        uploadModelBtn.addEventListener("click", () => modelFileInput.click());
-        modelFileInput.addEventListener("change", function(e) {
-            const file = this.files[0];
+        // ---- 上传文件（按钮 + 拖动） ----
+        function loadJsonFile(file) {
             if (!file) return;
             modelFileNameSpan.textContent = file.name;
             const dotIndex = file.name.lastIndexOf('.');
@@ -1631,18 +1730,40 @@
                 errorMsgEl.style.display = "block";
             };
             reader.readAsText(file);
+        }
+        uploadModelBtn.addEventListener("click", () => modelFileInput.click());
+        modelFileInput.addEventListener("change", function(e) {
+            loadJsonFile(this.files[0]);
+        });
+        // 拖放支持
+        const textareaWrapper = jsonInputEl.closest('.textarea-wrapper') || jsonInputEl.parentElement;
+        textareaWrapper.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drop-highlight');
+        });
+        textareaWrapper.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('drop-highlight');
+        });
+        textareaWrapper.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drop-highlight');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) loadJsonFile(files[0]);
         });
 
         // ---- 版本按钮点击 ----
         versionBtns.forEach(btn => {
             btn.addEventListener("click", function(e) {
+                // 跳过非版本按钮（如文件选择按钮）
+                if (this.dataset.version === undefined) return;
                 if (this.classList.contains('disabled')) {
                     let msg = '';
                     const ver = this.dataset.version;
                     if (ver === '2') {
                         msg = '开发中… 版本暂不支持转换，请选择其他版本。';
                     } else if (ver === '3') {
-                        msg = '普通版无法实现此模型的转换（存在底面非正方形的cube），已禁用该版本。请选择 ex 版（公版或米版）。';
+                        msg = '已移除对普通版的支持，请使用 ex 公版。';
                     } else {
                         msg = '该版本已被禁用，请选择其他版本。';
                     }
@@ -1707,7 +1828,94 @@
             jsonInputEl.dispatchEvent(new Event('input', {bubbles:true}));
         }
 
-        console.log('BB转FMBE转换器 v8.7 已加载');
+        // =================================================================
+        // 公告内容（硬编码，修改此处即可）
+        // =================================================================
+        const announcementText = `APP端将在联网条件下强制更新
+当前最新版本：v.8.8
+普通版转换管线暂时移除，ex版将只支持公版转换`;
+
+        // =================================================================
+        // 模块化更新日志（按日期从晚到早排列，新条目加在最前面）
+        // =================================================================
+        const changelogData = [
+            // ═══ 新版本加在这里（最上面 = 最新） ═══
+            { date: '2026/7/16', version: 'v.8.8', desc: '重构basepos转换逻辑，暂时移除ex公版以外所有版本' },
+            { date: '2026/7/12', version: 'v.8.7', desc: '修复欧拉角万向节死锁分支' },
+            { date: '2026/7/5',  version: 'v.8.6', desc: '支持ex版特殊解转换' },
+            { date: '2026/7/1',  version: 'v.8.5', desc: '优化命令导出功能' },
+            { date: '2026/7/1',  version: 'v.8.4', desc: '重写ex版的转换逻辑、版本选择逻辑' },
+            { date: '2026/4/11', version: 'v.8.3', desc: '完善欧拉角死锁问题' },
+            { date: '2026/3/15', version: 'v.8.2', desc: '补全exr和eyr' },
+            { date: '2026/3/14', version: 'v.8.0', desc: '新增模型多父骨骼绑定功能（旋转矩阵）' },
+            { date: '2026/3/10', version: 'v.7.3', desc: '修复"祈祷不出bug"无效的问题' },
+            { date: '2026/3/8',  version: 'v.7.2', desc: '修复无pivot块，错误赋值为骨骼旋转中心的问题' },
+            { date: '2026/3/8',  version: 'v.7.1', desc: '修复无父骨骼xbasepos取反问题' },
+            { date: '2026/3/7',  version: 'v.7',   desc: '新增模型多父骨骼转换功能（静态模型）' },
+            { date: '2026/3/7',  version: 'v.6-b3', desc: '添加简单教程' },
+            { date: '2026/3/7',  version: 'v.6-b2', desc: '彻底移除动画转换UI及骨骼延伸长度' },
+            { date: '2026/3/6',  version: 'v.6-b1', desc: '增加&lt;&gt;调用方块编号功能' },
+            { date: '2026/3/5',  version: 'v.6',   desc: '优化复制格式' },
+            { date: '2026/3/5',  version: 'v.5-b3', desc: '已解决rot换算错误问题' },
+            { date: '2026/3/3',  version: 'v.5-b1', desc: '尝试修复rot三轴同时有值的换算错误（b1及b2）' },
+            { date: '2026/3/1',  version: 'v.4-b6', desc: '修复了&#124;xrot&#124;>90时输出滚木的问题' },
+            { date: '2026/3/1',  version: 'v.4-b5', desc: '修复了动画转换器无法使用问题' },
+            { date: '2026/2/29', version: 'v.4-b4', desc: '修复了普通版scale输出格式漏掉v.的问题' },
+            { date: '2026/2/28', version: 'v.4-b3', desc: '增加文件选择功能' },
+            { date: '2026/2/28', version: 'v.4-b2', desc: '修复rot取反问题' },
+            { date: '2026/2/27', version: 'v.4-b1', desc: '新增补全molang前后指令功能' },
+            { date: '2026/2/25', version: 'v.3-b6', desc: '实验内容：支持cube存在一级以上父骨骼' },
+            { date: '2026/2/25', version: 'v.3-b5', desc: '修复公版输出的basepos数据错误bug' },
+            { date: '2026/2/25', version: 'v.3-b4', desc: '修复了关键帧动画所有basepos和rot正负符号错误的问题' },
+            { date: '2026/2/25', version: 'v.3-b3', desc: '修复h=0兼容、(yscale、extend_scale)high=NaN问题；x轴镜像问题' },
+            { date: '2026/2/24', version: 'v.3-b2', desc: '修复换算系数k≠1时basepos的计算错误问题' },
+            { date: '2026/2/24', version: 'v.3',   desc: '新增触手型关键帧动画转换实验性功能，支持多父骨骼' },
+            { date: '2026/2/23', version: 'v.2.1', desc: '修复数据不显示问题' },
+            { date: '2026/2/22', version: 'v.2',   desc: '新增单方块独立复制按钮，修复版本选择与转换功能bug' },
+            { date: '2026/2/21', version: 'v.1',   desc: '添加了选择版本时对版本的简概描述；移出〈前置旋转矩阵〉版本fmbe；修复错别字' },
+            { date: '2026/2/20', version: 'b0',   desc: '适配普通版' },
+            // ═══ 最旧版本在上面 ═══
+        ];
+
+        // ---- 渲染更新日志（含公告） ----
+        function renderChangelog() {
+            const container = document.getElementById('changelogContent');
+            if (!container) return;
+            let html = '';
+            // 公告区域
+            html += '<div class="changelog-announcement">';
+            html += '<div class="changelog-announcement-header">📢 公告</div>';
+            html += '<div class="changelog-announcement-body">' + escapeHTML(announcementText).replace(/\n/g, '<br>') + '</div>';
+            html += '</div>';
+            html += '<div class="sep-line">——————————</div>';
+            // 日志条目（已按日期从晚到早排列）
+            for (const entry of changelogData) {
+                html += `<div class="changelog-entry">
+                    <span class="entry-date">${escapeHTML(entry.date)}</span>
+                    <span class="entry-version">${escapeHTML(entry.version)}</span>
+                    <span class="entry-desc">${entry.desc}</span>
+                </div>`;
+            }
+            html += '<div class="sep-line">——————————</div>';
+            html += '<div class="contact-line">😭出现bug请联系 小E（QQ号3155929574）</div>';
+            container.innerHTML = html;
+        }
+        renderChangelog();
+
+        // ---- 更新日志折叠切换 ----
+        const changelogToggle = document.getElementById('changelogToggleBtn');
+        const changelogBody = document.getElementById('changelogBody');
+        const changelogArrow = document.getElementById('changelogArrow');
+        if (changelogToggle && changelogBody) {
+            changelogToggle.addEventListener('click', function() {
+                const isOpen = changelogBody.classList.toggle('open');
+                if (changelogArrow) changelogArrow.classList.toggle('open', isOpen);
+            });
+        }
+
+
+
+        console.log('BB转FMBE转换器 v8.8 已加载');
     });
 </script>
 </body>
