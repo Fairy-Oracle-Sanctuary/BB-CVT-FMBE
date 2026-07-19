@@ -20,7 +20,7 @@
             --primary-dark: #2563eb;
             --primary-light: #93c5fd;
             --bg-gradient-start: #e0f2fe;
-            --bg-gradient-end: #dbeafe;
+            --bg-gradient-end: #dbeafe;                                 
             --card-bg: #ffffff;
             --text-main: #1e293b;
             --text-secondary: #64748b;
@@ -698,11 +698,7 @@
             padding: 24px;
             max-width: 400px;
             width: 90%;
-            transform: skewX(var(--skew-angle));
             box-shadow: var(--shadow-lg);
-        }
-        .dialog-box > div {
-            transform: skewX(var(--skew-reverse));
         }
         .dialog-title {
             font-size: 20px;
@@ -715,6 +711,7 @@
             color: var(--text-secondary);
             margin-bottom: 20px;
             line-height: 1.5;
+            white-space: pre-wrap;
         }
         .dialog-desc small {
             display: block;
@@ -849,6 +846,40 @@
         .changelog-entry .entry-desc br + br {
             display: inline;
         }
+        .changelog-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .changelog-detail-btn {
+            flex-shrink: 0;
+            padding: 2px 10px;
+            border: 1px solid #fca5a5;
+            border-radius: 4px;
+            background: #fee2e2;
+            color: #dc2626;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+            font-family: inherit;
+            line-height: 1.6;
+            margin-left: auto;
+            transform: skewX(var(--skew-angle));
+        }
+        .changelog-detail-btn span {
+            display: inline-block;
+            transform: skewX(var(--skew-reverse));
+        }
+        .changelog-detail-btn:hover {
+            background: #fecaca;
+            transform: scale(1.05);
+        }
+        .changelog-detail-btn:active {
+            transform: scale(0.95);
+        }
         .changelog-add-btn {
             display: inline-flex;
             align-items: center;
@@ -919,7 +950,7 @@
 </div>
 <!-- ===== 版本选择卡片结束 ===== -->
 <div class="main-btn-group"><button class="primary-btn" id="convertBtn"><span>转换</span></button></div>
-<div class="hint-bar"><span class="icon">⚠️</span><span class="text">cube <strong>底面</strong> 须为<strong style="color:red">正方形</strong></span></div>
+<div class="hint-bar"><span class="icon">⚠️</span><span class="text">cube <strong>底面</strong> 须为<strong style="color:red">正方形</strong>（Y厚度为0的2D平面除外）</span></div>
         <div id="errorMsg" class="error-box" style="display: none;"></div>
         <div class="card output-card" id="outputGroup" style="display: none;">
             <div class="output-header"><div class="output-title"><span class="icon">📦</span><span>转换输出</span></div><button class="cube-copy-btn" id="copyAllBtn">📁 导出命令文件</button></div>
@@ -1182,7 +1213,7 @@
             const matRx  = new THREE.Matrix4().makeRotationX(degToRad(rx));
             const matRy  = new THREE.Matrix4().makeRotationY(degToRad(-ry));
             const matRz  = new THREE.Matrix4().makeRotationZ(degToRad(-rz));
-
+            
             const localMat = matB.clone();
             localMat.premultiply(matEsy);
             localMat.premultiply(matEyr);
@@ -1211,14 +1242,34 @@
         // =================================================================
         // 从 M 数组生成 FMBE 命令字符串
         //    M = [xpos, ypos, zpos, xrot, yrot, zrot, scale, extend_scale, extend_xrot, extend_yrot, xbasepos, ybasepos, zbasepos]
+        //    rotatex/rotatez: 2D平面专属附加参数
+        //    useRotateFields: 2D平面时=true，输出字段改为rotatex/y/z
         // =================================================================
-        function generateCommandFromM(M) {
+        function generateCommandFromM(M, rotatexOpt, rotatezOpt, useRotateFields) {
             const f = (v) => formatNum(v);
-            return `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
-                   `v.xrot=${f(M[3])}; v.yrot=${f(M[4])}; v.zrot=${f(M[5])}; ` +
-                   `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
-                   `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
-                   `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};`;
+            let cmd;
+            if (useRotateFields) {
+                // 2D平面：xrot/zrot = generateRectParams的rx/rz, rotatex/y/z = 原始骨骼角度
+                cmd = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                      `v.xrot=${rotatexOpt !== undefined ? f(rotatexOpt) : f(M[3])}; ` +
+                      `v.yrot=${f(M[4])}; ` +
+                      `v.zrot=${rotatezOpt !== undefined ? f(rotatezOpt) : f(M[5])}; ` +
+                      `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                      `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                      `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
+                      ` v.rotatex=${f(M[3])}; v.rotatey=${f(M[4])}; v.rotatez=${f(M[5])};`;
+            } else {
+                cmd = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                      `v.xrot=${f(M[3])}; v.yrot=${f(M[4])}; v.zrot=${f(M[5])}; ` +
+                      `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                      `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                      `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};`;
+            }
+            if (!useRotateFields) {
+                if (rotatexOpt !== undefined) cmd += ` v.rotatex=${f(rotatexOpt)};`;
+                if (rotatezOpt !== undefined) cmd += ` v.rotatez=${f(rotatezOpt)};`;
+            }
+            return cmd;
         }
 
         // =================================================================
@@ -1288,6 +1339,7 @@
             let hasXYEqual = false;
             let hasZYEqual = false;
             let hasIncompatible = false;
+            let has2DPlane = false;
             let totalCubes = 0;
 
             for (const bone of bones) {
@@ -1295,20 +1347,28 @@
                     totalCubes++;
                     const [sx, sy, sz] = cube.size;
                     const xzEqual = Math.abs(sx - sz) <= EPS;
+                    const isThinY = sy < EPS;
                     if (!xzEqual) {
                         allXZEqual = false;
-                        const xyEqual = Math.abs(sx - sy) <= EPS;
-                        const zyEqual = Math.abs(sz - sy) <= EPS;
-                        if (xyEqual) hasXYEqual = true;
-                        if (zyEqual) hasZYEqual = true;
-                        if (!xyEqual && !zyEqual) hasIncompatible = true;
+                        // 2D平面（Y=0且XZ不相等）视为兼容
+                        if (isThinY) {
+                            has2DPlane = true;
+                        } else {
+                            const xyEqual = Math.abs(sx - sy) <= EPS;
+                            const zyEqual = Math.abs(sz - sy) <= EPS;
+                            if (xyEqual) hasXYEqual = true;
+                            if (zyEqual) hasZYEqual = true;
+                            if (!xyEqual && !zyEqual) hasIncompatible = true;
+                        }
                     }
                 }
             }
 
-            const needExMode = !allXZEqual && (hasXYEqual || hasZYEqual);
+            const needExMode = !allXZEqual && (hasXYEqual || hasZYEqual || has2DPlane);
             let typeDesc = '';
-            if (hasXYEqual && hasZYEqual) typeDesc = 'xy 和 zy 两种类型';
+            if (has2DPlane && (hasXYEqual || hasZYEqual)) typeDesc = '2D平面 + 特殊尺寸';
+            else if (has2DPlane) typeDesc = '2D平面（Y厚度为0）';
+            else if (hasXYEqual && hasZYEqual) typeDesc = 'xy 和 zy 两种类型';
             else if (hasXYEqual) typeDesc = 'xy（宽等于高）';
             else if (hasZYEqual) typeDesc = 'zy（长等于高）';
 
@@ -1317,10 +1377,15 @@
                 for (const cube of bone.cubes) {
                     const [sx, sy, sz] = cube.size;
                     const xzEqual = Math.abs(sx - sz) <= EPS;
+                    const isThinY = sy < EPS;
                     if (!xzEqual) {
-                        const xyEqual = Math.abs(sx - sy) <= EPS;
-                        const zyEqual = Math.abs(sz - sy) <= EPS;
-                        if (xyEqual || zyEqual) specialCubeCount++;
+                        if (isThinY) {
+                            specialCubeCount++; // 2D平面也算特殊
+                        } else {
+                            const xyEqual = Math.abs(sx - sy) <= EPS;
+                            const zyEqual = Math.abs(sz - sy) <= EPS;
+                            if (xyEqual || zyEqual) specialCubeCount++;
+                        }
                     }
                 }
             }
@@ -1355,6 +1420,84 @@
             }
         }
 
+        // ---- 2D平面参数生成（移植自C++程序） ----
+        function generateRectParams(a, b) {
+            function round6(v) { return Math.round(v * 1e6) / 1e6; }
+            const PI = Math.PI;
+
+            let ey, sc, l1;
+            if (a > b) {
+                ey = 0.0;
+                sc = a;
+                l1 = b / a;
+            } else if (b > a) {
+                ey = 90.0;
+                sc = b;
+                l1 = a / b;
+            } else {
+                ey = 0.0;
+                sc = a;
+                l1 = 1.0;
+            }
+
+            const es = 0.0001;
+            const clamped = Math.max(-1.0, Math.min(1.0, l1));
+            const ex_deg = -Math.asin(clamped) * 180.0 / PI;
+            const xr = (90.0 - ex_deg) * Math.cos(ey * PI / 180.0);
+            const zr = (90.0 + ex_deg) * Math.sin(ey * PI / 180.0);
+
+            return {
+                extend_yrot: round6(ey),
+                scale: round6(sc),
+                l1: round6(clamped),
+                extend_scale: round6(es),
+                extend_xrot: round6(ex_deg),
+                rotatex: round6(xr),
+                rotatez: round6(zr)
+            };
+        }
+
+        // ---- 从旋转矩阵提取 ZXY 顺序欧拉角（用于 rotatex/y/z 全局旋转变量） ----
+        // 对应模拟器 globalRot = Ry(-rotatey) * Rz(-rotatez) * Rx(rotatex)
+        // 矩阵 R = Ry(θy) * Rz(θz) * Rx(θx)
+        function extractRotateFromMatrix(R_2d) {
+            const r00 = R_2d[0][0], r01 = R_2d[0][1], r02 = R_2d[0][2];
+            const r10 = R_2d[1][0], r11 = R_2d[1][1], r12 = R_2d[1][2];
+            const r20 = R_2d[2][0], r21 = R_2d[2][1], r22 = R_2d[2][2];
+
+            // Ry(θy) * Rz(θz) * Rx(θx) 提取公式（使用atan2保证象限正确）:
+            // r10 = sin(θz), r11 = cos(θz)cos(θx), r12 = -cos(θz)sin(θx)
+            // r20 = -sin(θy)cos(θz), r00 = cos(θy)cos(θz)
+            let z = Math.asin(Math.min(Math.max(r10, -1), 1));
+            let cos_z = Math.cos(z);
+            let x, y;
+            if (Math.abs(cos_z) > 1e-6) {
+                x = Math.atan2(-r12, r11);
+                y = Math.atan2(-r20, r00);
+            } else {
+                // 万向节死锁 cos_z ≈ 0，z ≈ ±90°
+                // 统一取 z = 90° (正角)，调整 x 公式以适应 z 的原始符号
+                // z=+90°时: r01=-cos(y+x), r02=sin(y+x) => y+x=atan2(r02,-r01)
+                // z=-90°时: r01=cos(y-x),  r02=sin(y-x)  => 用z=90°公式+取反x
+                y = 0;
+                const sumAngle = Math.atan2(r02, -r01); // y+x 角
+                if (z >= 0) {
+                    x = sumAngle;
+                } else {
+                    // z原为-90°，提升为+90°并翻转x
+                    z = Math.PI / 2;
+                    x = -sumAngle;
+                }
+            }
+
+            const rad2deg = (r) => r * 180 / Math.PI;
+            return {
+                rotatex: rad2deg(x),
+                rotatey: -rad2deg(y),
+                rotatez: -rad2deg(z)
+            };
+        }
+
         // ---- 核心转换函数（修正版） ----
         function doConversion(bones, k) {
             try {
@@ -1375,6 +1518,27 @@
                 let boneGroups = {};
                 let totalCubeCount = 0;
 
+                // ---- 预处理：检测2D平面（Y厚度为0且XZ不相等的平面） ----
+                {
+                    let planeCount = 0;
+                    for (const bone of bones) {
+                        for (const cube of bone.cubes) {
+                            const [sx, sy, sz] = cube.size;
+                            const xzEqual = Math.abs(sx - sz) <= EPS;
+                            if (sy < EPS && !xzEqual) {
+                                cube.size[1] = 0.001;
+                                cube._is2DPlane = true;
+                                planeCount++;
+                            } else {
+                                cube._is2DPlane = false;
+                            }
+                        }
+                    }
+                    if (planeCount > 0) {
+                        warnings += `检测到 ${planeCount} 个2D平面（Y厚度为0），已自动设置Y厚度为0.001\n`;
+                    }
+                }
+
                 let cube_index = 0;
                 for (const bone of bones) {
                     const boneAncestors = getAncestors(bone, true);
@@ -1390,13 +1554,21 @@
                         const [sx,sy,sz] = cube.size;
                         if (sx <= EPS || sy < 0 || sz <= EPS) { warnings += `方块${cube_id}：尺寸必须为非负数，已跳过\n`; continue; }
 
+                        const is2DPlane = cube._is2DPlane || false;
                         const xzEqual = Math.abs(sx - sz) <= EPS;
                         const xyEqual = Math.abs(sx - sy) <= EPS;
                         const zyEqual = Math.abs(sz - sy) <= EPS;
 
-                        // 检查尺寸兼容性
-                        if (!xzEqual && !(xyEqual || zyEqual)) {
-                            warnings += `方块${cube_id}：尺寸不兼容（x≠z 且 x≠y 且 z≠y），已跳过\n`;
+                        // 检查尺寸兼容性（2D平面不受此限制）
+                        if (!is2DPlane && !xzEqual && !(xyEqual || zyEqual)) {
+                            // 特殊提示：Z=0且XY不相等 或 X=0且ZY不相等
+                            if (Math.abs(sz) <= EPS && !xyEqual) {
+                                warnings += `方块${cube_id}：Z厚度为0且XY尺寸不相等，无法转换，已跳过\n`;
+                            } else if (Math.abs(sx) <= EPS && !zyEqual) {
+                                warnings += `方块${cube_id}：X厚度为0且ZY尺寸不相等，无法转换，已跳过\n`;
+                            } else {
+                                warnings += `方块${cube_id}：尺寸不兼容（x≠z 且 x≠y 且 z≠y），已跳过\n`;
+                            }
                             continue;
                         }
 
@@ -1404,13 +1576,16 @@
                         let center = [ox+sx/2, oy+sy/2, oz+sz/2];
                         let cubeRotMatrix = null;
                         if (cube.has_rotation) {
-                            cubeRotMatrix = buildBlockbenchRotMatrix(-cube.rotation[0], -cube.rotation[1], -cube.rotation[2]);
-                            const pivot = cube.has_cube_pivot ? cube.cube_pivot : center;
-                            const dx = center[0]-pivot[0], dy=center[1]-pivot[1], dz=center[2]-pivot[2];
-                            const rx = cubeRotMatrix[0][0]*dx + cubeRotMatrix[0][1]*dy + cubeRotMatrix[0][2]*dz;
-                            const ry = cubeRotMatrix[1][0]*dx + cubeRotMatrix[1][1]*dy + cubeRotMatrix[1][2]*dz;
-                            const rz = cubeRotMatrix[2][0]*dx + cubeRotMatrix[2][1]*dy + cubeRotMatrix[2][2]*dz;
-                            center = [rx+pivot[0], ry+pivot[1], rz+pivot[2]];
+                            const cr = buildBlockbenchRotMatrix(-cube.rotation[0], -cube.rotation[1], -cube.rotation[2]);
+                            cubeRotMatrix = cr;
+                            if (!is2DPlane) {
+                                const pivot = cube.has_cube_pivot ? cube.cube_pivot : center;
+                                const dx = center[0]-pivot[0], dy=center[1]-pivot[1], dz=center[2]-pivot[2];
+                                const rx = cr[0][0]*dx + cr[0][1]*dy + cr[0][2]*dz;
+                                const ry = cr[1][0]*dx + cr[1][1]*dy + cr[1][2]*dz;
+                                const rz = cr[2][0]*dx + cr[2][1]*dy + cr[2][2]*dz;
+                                center = [rx+pivot[0], ry+pivot[1], rz+pivot[2]];
+                            }
                         }
                         let finalCenter = applyChain(center, boneAncestors);
                         let finalCubePivot = null;
@@ -1477,6 +1652,82 @@
                         M[4] = -angles.ry;           // v.yrot
                         M[5] = angles.rz;            // v.zrot
 
+                        // ---- 如果是2D平面，使用完整变换矩阵计算所有参数 ----
+                        if (is2DPlane) {
+                            const params = generateRectParams(sx, sz);
+                            const effScale = params.scale / k;
+                            const effExtScale = params.extend_scale;
+
+                            // 1. 固定pos为骨骼枢轴世界坐标
+                            const posWorld = [M[0], M[1], M[2]];
+
+                            // 2. 构建不含base的M_temp，通过computeTransformMatrix得到局部线性变换
+                            //    注意：不传入全局旋转（0,0,0），因为2D平面的局部变换已包含所有方向信息
+                            const M_temp = [
+                                0, 0, 0,              // px,py,pz=0
+                                params.rotatex, 0, params.rotatez,  // rx,ry,rz（局部旋转 = params的输出）
+                                effScale,             // s
+                                effExtScale,          // es
+                                params.extend_xrot,   // ex
+                                params.extend_yrot,   // ey
+                                0, 0, 0               // bx,by,bz=0
+                            ];
+                            const worldMat = computeTransformMatrix(M_temp, 0, 0, 0);
+                            // 提取线性部分（左上3x3）
+                            const e = worldMat.elements;
+                            const linearMat = new THREE.Matrix3().set(
+                                e[0], e[1], e[2],
+                                e[4], e[5], e[6],
+                                e[8], e[9], e[10]
+                            );
+
+                            // 3. 计算Blockbench坐标系下的偏移（不翻转X）
+                            //    baseVec由线性矩阵逆求解，然后通过M[10]=-baseVec.x实现FMBE X翻转
+                            const offsetBb = new THREE.Vector3(
+                                (finalCenter[0] - worldPivot[0]) / k,
+                                (finalCenter[1] - worldPivot[1]) / k,
+                                (finalCenter[2] - worldPivot[2]) / k
+                            );
+
+                            // 4. 求解 base = linearMat^{-1} * offset
+                            const linearMatInv = linearMat.clone().invert();
+                            const baseVec = offsetBb.clone().applyMatrix3(linearMatInv);
+
+                            // 5. 填充M数组（与non-2D一致：offset用BB坐标，M[10]取反实现FMBE X翻转）
+                            M[3] = params.rotatex;
+                            M[4] = 0;
+                            M[5] = params.rotatez;
+                            M[6] = effScale;
+                            M[7] = effExtScale;
+                            M[8] = params.extend_xrot;
+                            M[9] = params.extend_yrot;
+                            M[10] = -baseVec.x;
+                            M[11] = params.extend_yrot === 0 ? -baseVec.y : baseVec.y;
+                            M[12] =  baseVec.z;
+
+                            // 6. 计算ZXY rotate角度（从XZY→ZXY转换）
+                            const rx_rad = deg2rad(angles.rx);
+                            const ry_rad = deg2rad(angles.ry);
+                            const rz_rad = deg2rad(-angles.rz);
+                            const xzyMat = mulMat(makeRotY(ry_rad), mulMat(makeRotX(rx_rad), makeRotZ(rz_rad)));
+                            const rotateAngles = extractRotateFromMatrix(xzyMat);
+                            const f = (v) => formatNum(v);
+                            const cmdBody = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                                `v.xrot=${f(params.rotatex)}; v.yrot=${f(0)}; v.zrot=${f(params.rotatez)}; ` +
+                                `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                                `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                                `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
+                                ` v.rotatex=${f(rotateAngles.rotatex)}; v.rotatey=${f(rotateAngles.rotatey)}; v.rotatez=${f(rotateAngles.rotatez)};`;
+                            const cubeDataCode = cmdBody;
+
+                            // 调试信息已移除
+
+                            const finalCommand = customPrefix.replace(/&<>/g, cube_id) + cubeDataCode + customSuffix.replace(/&<>/g, cube_id);
+                            boneGroups[boneName].commands.push({ id: cube_id, command: finalCommand });
+                            continue; // 跳过后续普通处理
+                        }
+
+                        // ---- 非2D平面的原有处理流程 ----
                         // size (M[6..7])
                         M[6] = scale;                // v.scale
                         M[7] = e_scale;              // v.extend_scale / v.high
@@ -1832,7 +2083,7 @@
         // 公告内容（硬编码，修改此处即可）
         // =================================================================
         const announcementText = `APP端将在联网条件下强制更新
-当前最新版本：v.8.8
+当前最新版本：v.9.00
 普通版转换管线暂时移除，ex版将只支持公版转换`;
 
         // =================================================================
@@ -1840,6 +2091,17 @@
         // =================================================================
         const changelogData = [
             // ═══ 新版本加在这里（最上面 = 最新） ═══
+            {
+                date: '2026/7/19',
+                version: 'v.9.00',
+                desc: '支持2D平面转换！',
+                btnText: '查看详情',
+                detail: '新增Y厚度为0的2D平面方块转换支持。\n'
+                    + '- 自动检测2D平面（Y≈0且X≠Z）\n'
+                    + '- 注：2D平面的输出命令会含有rotate变量（请注意你的前置是否有该变量）\n'
+                    + '- 如果不想使用rotate变量，可在模拟器中把rotate转换为rot\n'
+                   ,
+            },
             { date: '2026/7/16', version: 'v.8.8', desc: '重构basepos转换逻辑，暂时移除ex公版以外所有版本' },
             { date: '2026/7/12', version: 'v.8.7', desc: '修复欧拉角万向节死锁分支' },
             { date: '2026/7/5',  version: 'v.8.6', desc: '支持ex版特殊解转换' },
@@ -1890,10 +2152,13 @@
             html += '<div class="sep-line">——————————</div>';
             // 日志条目（已按日期从晚到早排列）
             for (const entry of changelogData) {
+                const btnText = entry.btnText || '点击详情';
+                const hasDetail = !!entry.detail;
                 html += `<div class="changelog-entry">
                     <span class="entry-date">${escapeHTML(entry.date)}</span>
                     <span class="entry-version">${escapeHTML(entry.version)}</span>
                     <span class="entry-desc">${entry.desc}</span>
+                    ${hasDetail ? `<button class="changelog-detail-btn" data-detail="${escapeHTML(entry.detail)}"><span>${escapeHTML(btnText)}</span></button>` : ''}
                 </div>`;
             }
             html += '<div class="sep-line">——————————</div>';
@@ -1901,6 +2166,18 @@
             container.innerHTML = html;
         }
         renderChangelog();
+
+        // ---- 更新日志详情按钮点击事件 - 弹出对话框 ----
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.changelog-detail-btn');
+            if (!btn) return;
+            const detail = btn.dataset.detail || '暂无详细信息';
+            // 找到对应的版本号
+            const entry = btn.closest('.changelog-entry');
+            const versionEl = entry && entry.querySelector('.entry-version');
+            const title = versionEl ? versionEl.textContent : '更新详情';
+            showInfoDialog(title, detail);
+        });
 
         // ---- 更新日志折叠切换 ----
         const changelogToggle = document.getElementById('changelogToggleBtn');
@@ -1915,7 +2192,7 @@
 
 
 
-        console.log('BB转FMBE转换器 v8.8 已加载');
+        console.log('BB转FMBE转换器 v.9.00 已加载');
     });
 </script>
 </body>
