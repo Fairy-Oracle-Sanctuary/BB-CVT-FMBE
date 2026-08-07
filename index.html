@@ -4,7 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BB转FMBE命令之转换器</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // 最小 THREE 兼容垫片：仅实现本转换器用到的 Matrix4 / Matrix3 / Vector3 接口
+    // 行为对齐 three.js r128，使转换器可离线运行（无需 CDN）。
+    (function (global) {
+      function Matrix4() { this.elements = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]; }
+      Matrix4.prototype.set = function (n11,n12,n13,n14, n21,n22,n23,n24, n31,n32,n33,n34, n41,n42,n43,n44) {
+        const e = this.elements;
+        e[0]=n11; e[1]=n21; e[2]=n31; e[3]=n41;
+        e[4]=n12; e[5]=n22; e[6]=n32; e[7]=n42;
+        e[8]=n13; e[9]=n23; e[10]=n33; e[11]=n43;
+        e[12]=n14; e[13]=n24; e[14]=n34; e[15]=n44;
+        return this;
+      };
+      Matrix4.prototype.makeTranslation = function (x,y,z) { return this.set(1,0,0,x, 0,1,0,y, 0,0,1,z, 0,0,0,1); };
+      Matrix4.prototype.makeScale = function (x,y,z) { return this.set(x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1); };
+      Matrix4.prototype.makeRotationX = function (t) { const c=Math.cos(t),s=Math.sin(t); return this.set(1,0,0,0, 0,c,-s,0, 0,s,c,0, 0,0,0,1); };
+      Matrix4.prototype.makeRotationY = function (t) { const c=Math.cos(t),s=Math.sin(t); return this.set(c,0,s,0, 0,1,0,0, -s,0,c,0, 0,0,0,1); };
+      Matrix4.prototype.makeRotationZ = function (t) { const c=Math.cos(t),s=Math.sin(t); return this.set(c,-s,0,0, s,c,0,0, 0,0,1,0, 0,0,0,1); };
+      Matrix4.prototype.clone = function () { const m = new Matrix4(); m.elements = this.elements.slice(); return m; };
+      Matrix4.prototype.multiplyMatrices = function (a, b) {
+        const ae = a.elements, be = b.elements, te = this.elements;
+        const a11=ae[0],a21=ae[1],a31=ae[2],a41=ae[3], a12=ae[4],a22=ae[5],a32=ae[6],a42=ae[7],
+              a13=ae[8],a23=ae[9],a33=ae[10],a43=ae[11], a14=ae[12],a24=ae[13],a34=ae[14],a44=ae[15];
+        const b11=be[0],b21=be[1],b31=be[2],b41=be[3], b12=be[4],b22=be[5],b32=be[6],b42=be[7],
+              b13=be[8],b23=be[9],b33=be[10],b43=be[11], b14=be[12],b24=be[13],b34=be[14],b44=be[15];
+        te[0]=a11*b11+a12*b21+a13*b31+a14*b41; te[4]=a11*b12+a12*b22+a13*b32+a14*b42;
+        te[8]=a11*b13+a12*b23+a13*b33+a14*b43; te[12]=a11*b14+a12*b24+a13*b34+a14*b44;
+        te[1]=a21*b11+a22*b21+a23*b31+a24*b41; te[5]=a21*b12+a22*b22+a23*b32+a24*b42;
+        te[9]=a21*b13+a22*b23+a23*b33+a24*b43; te[13]=a21*b14+a22*b24+a23*b34+a24*b44;
+        te[2]=a31*b11+a32*b21+a33*b31+a34*b41; te[6]=a31*b12+a32*b22+a33*b32+a34*b42;
+        te[10]=a31*b13+a32*b23+a33*b33+a34*b43; te[14]=a31*b14+a32*b24+a33*b34+a34*b44;
+        te[3]=a41*b11+a42*b21+a43*b31+a44*b41; te[7]=a41*b12+a42*b22+a43*b32+a44*b42;
+        te[11]=a41*b13+a42*b23+a43*b33+a44*b43; te[15]=a41*b14+a42*b24+a43*b34+a44*b44;
+        return this;
+      };
+      Matrix4.prototype.multiply = function (m) { return this.multiplyMatrices(this, m); };
+      Matrix4.prototype.premultiply = function (m) { return this.multiplyMatrices(m, this); };
+
+      function Matrix3() { this.elements = [1,0,0, 0,1,0, 0,0,1]; }
+      Matrix3.prototype.set = function (n11,n12,n13, n21,n22,n23, n31,n32,n33) {
+        const e = this.elements;
+        e[0]=n11; e[1]=n21; e[2]=n31; e[3]=n12; e[4]=n22; e[5]=n32; e[6]=n13; e[7]=n23; e[8]=n33;
+        return this;
+      };
+      Matrix3.prototype.setFromMatrix4 = function (m) {
+        const e = m.elements;
+        return this.set(e[0],e[4],e[8], e[1],e[5],e[9], e[2],e[6],e[10]);
+      };
+      Matrix3.prototype.clone = function () { const m = new Matrix3(); m.elements = this.elements.slice(); return m; };
+      Matrix3.prototype.invert = function () {
+        const te = this.elements,
+          n11=te[0],n21=te[1],n31=te[2], n12=te[3],n22=te[4],n32=te[5], n13=te[6],n23=te[7],n33=te[8],
+          t11=n33*n22-n32*n23, t12=n32*n13-n33*n12, t13=n23*n12-n22*n13;
+        const det = t11*n11 + t12*n21 + t13*n31;
+        if (det === 0) return this.set(0,0,0,0,0,0,0,0,0);
+        const id = 1/det;
+        te[0]=t11*id; te[1]=(n31*n23-n33*n21)*id; te[2]=(n32*n21-n31*n22)*id;
+        te[3]=t12*id; te[4]=(n11*n33-n13*n31)*id; te[5]=(n12*n31-n11*n32)*id;
+        te[6]=t13*id; te[7]=(n21*n13-n23*n11)*id; te[8]=(n22*n11-n21*n12)*id;
+        return this;
+      };
+
+      function Vector3(x,y,z) { this.x=x||0; this.y=y||0; this.z=z||0; }
+      Vector3.prototype.clone = function () { return new Vector3(this.x, this.y, this.z); };
+      Vector3.prototype.add = function (v) { this.x+=v.x; this.y+=v.y; this.z+=v.z; return this; };
+      Vector3.prototype.applyMatrix3 = function (m) {
+        const x=this.x, y=this.y, z=this.z, e=m.elements;
+        this.x=e[0]*x+e[3]*y+e[6]*z; this.y=e[1]*x+e[4]*y+e[7]*z; this.z=e[2]*x+e[5]*y+e[8]*z;
+        return this;
+      };
+      Vector3.prototype.setFromMatrixPosition = function (m) {
+        const e = m.elements; this.x=e[12]; this.y=e[13]; this.z=e[14]; return this;
+      };
+
+      global.THREE = { Matrix4: Matrix4, Matrix3: Matrix3, Vector3: Vector3 };
+    })(typeof window !== 'undefined' ? window : globalThis);
+    </script>
     <style>
         
         * {
@@ -953,7 +1029,7 @@
 <div class="hint-bar"><span class="icon">⚠️</span><span class="text">cube <strong>底面</strong> 须为<strong style="color:red">正方形</strong>（Y厚度为0的2D平面除外）</span></div>
         <div id="errorMsg" class="error-box" style="display: none;"></div>
         <div class="card output-card" id="outputGroup" style="display: none;">
-            <div class="output-header"><div class="output-title"><span class="icon">📦</span><span>转换输出</span></div><button class="cube-copy-btn" id="copyAllBtn">📁 导出命令文件</button></div>
+            <div class="output-header"><div class="output-title"><span class="icon">📦</span><span>转换输出</span></div><div class="output-actions" style="display:flex; gap:8px;"><button class="cube-copy-btn" id="openSimBtn">🚀 打开模拟器并导入</button><button class="cube-copy-btn" id="copyAllBtn">📁 导出命令文件</button></div></div>
             <div class="output-wrapper"><div class="output-box" id="outputText"></div></div>
         </div>
         <!-- ===== 折叠更新日志 ===== -->
@@ -996,6 +1072,17 @@
             <div class="dialog-buttons"><button class="dialog-btn confirm" id="infoDialogOk">知道了</button></div>
         </div></div>
     </div>
+    <!-- ===== ex公版 版本说明对话框（含获取前置按钮） ===== -->
+    <div id="versionDialog" class="dialog-overlay">
+        <div class="dialog-box">
+            <div class="dialog-title" id="versionDialogTitle">ex公版</div>
+            <div class="dialog-desc" id="versionDialogDesc">未经过修改的 ex（高级版fmbe），默认版本。<br><br>注意：2D平面（Y厚度为0）的转换会产生 rotate 变量，ex公版需要挂载“EX公版前置”才能正确解析 rotate。若你的前置不支持 rotate，可用 EX FMBE 模拟器的欧拉角转换小工具把 rotate 转为 rot。</div>
+            <div class="dialog-buttons">
+                <button class="dialog-btn confirm" id="versionGetPrefixBtn">📋 获取EX公版前置</button>
+                <button class="dialog-btn cancel" id="versionDialogClose">关闭</button>
+            </div>
+        </div>
+    </div>
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1025,12 +1112,24 @@
         const infoDialogTitle = document.getElementById('infoDialogTitle');
         const infoDialogDesc = document.getElementById('infoDialogDesc');
         const infoDialogOk = document.getElementById('infoDialogOk');
+        const versionDialog = document.getElementById('versionDialog');
+        const versionDialogTitle = document.getElementById('versionDialogTitle');
+        const versionDialogDesc = document.getElementById('versionDialogDesc');
+        const versionGetPrefixBtn = document.getElementById('versionGetPrefixBtn');
+        const versionDialogClose = document.getElementById('versionDialogClose');
 
         const versionCard = document.getElementById("versionCard");
 
         let currentVersion = 0;
         let tutorialTimer = null;
         let currentJsonFileName = '';
+
+        // EX 公版前置（2D平面产生 rotate 变量时使用；供用户复制作为命令前缀）
+        const EX_PREFIX_BLOCK = `playanimation @e[tag=wiki:fmbe] animation.player.sleeping _ 0 "v.xpos=v.xpos??0;v.ypos=v.ypos??0;v.zpos=v.zpos??0;v.xrot=v.xrot??0;v.yrot=v.yrot??0;v.zrot=v.zrot??0;v.scale=v.scale??1;v.extend_scale=v.extend_scale??1;v.extend_xrot=v.extend_xrot??-90;v.extend_yrot=v.extend_yrot??0;v.xbasepos=v.xbasepos??0;v.ybasepos=v.ybasepos??0;v.zbasepos=v.zbasepos??0;v.F.r5=-math.sin(v.xrot);v.F.r2=-math.sin(v.yrot);v.F.r3=-math.sin(v.zrot);v.F.r4=math.cos(v.zrot);v.F.r8=math.cos(v.yrot);v.F.r0=-v.F.r5*v.F.r2*v.F.r3+v.F.r8*v.F.r4;v.F.r1=-v.F.r5*v.F.r2*v.F.r4-v.F.r8*v.F.r3;v.F.r6=-v.F.r5*v.F.r8*v.F.r3-v.F.r2*v.F.r4;v.F.r7=-v.F.r5*v.F.r8*v.F.r4+v.F.r2*v.F.r3;v.F.r2=v.F.r2*math.cos(v.xrot);v.F.r3=v.F.r3*math.cos(v.xrot);v.F.r4=v.F.r4*math.cos(v.xrot);v.F.r8=v.F.r8*math.cos(v.xrot);v.F.e0=math.cos(v.extend_yrot);v.F.e4=math.cos(v.extend_xrot);v.F.e5=-math.sin(v.extend_xrot);v.F.e6=math.sin(v.extend_yrot);v.F.e1=v.F.e5*v.F.e6;v.F.e2=-v.F.e4*v.F.e6;v.F.e7=-v.F.e5*v.F.e0;v.F.e8=v.F.e4*v.F.e0;v.F.p0=v.F.r0*v.F.e0+v.F.r2*v.F.e6;v.F.p1=v.F.r0*v.F.e1+v.F.r1*v.F.e4+v.F.r2*v.F.e7;v.F.p2=v.F.r0*v.F.e2+v.F.r1*v.F.e5+v.F.r2*v.F.e8;v.F.p3=v.F.r3*v.F.e0+v.F.r5*v.F.e6;v.F.p4=v.F.r3*v.F.e1+v.F.r4*v.F.e4+v.F.r5*v.F.e7;v.F.p5=v.F.r3*v.F.e2+v.F.r4*v.F.e5+v.F.r5*v.F.e8;v.F.p6=v.F.r6*v.F.e0+v.F.r8*v.F.e6;v.F.p7=v.F.r6*v.F.e1+v.F.r7*v.F.e4+v.F.r8*v.F.e7;v.F.p8=v.F.r6*v.F.e2+v.F.r7*v.F.e5+v.F.r8*v.F.e8;" controller.animation.fox.move
+playanimation @e[tag=wiki:fmbe] animation.creeper.swelling _ 0 "v.swelling_scale2=v.extend_scale*(v.swelling_scale1=(v.F.s=math.sqrt(32/7*v.scale)));" wiki.fmbe.3d_blocks.anim1
+playanimation @e[tag=wiki:fmbe] animation.ender_dragon.neck_head_movement _ 0 "v.head_position_x=-16/v.F.s*((v.xpos-1)*v.F.p1+(v.ypos-1/128)*v.F.p4+v.zpos*v.F.p7+(v.xbasepos*v.F.e1+(v.ybasepos+10/7)*v.extend_scale*v.F.e4+(v.zbasepos-16/7)*v.F.e7)*v.scale);v.head_position_y=16/v.F.s*(((v.xpos-1)*v.F.p2+(v.ypos-1/128)*v.F.p5+v.zpos*v.F.p8)/v.extend_scale+(v.xbasepos*v.F.e2+(v.ybasepos+10/7)*v.extend_scale*v.F.e5+(v.zbasepos-16/7)*v.F.e8)*v.scale);v.head_position_z=16/v.F.s*((v.xpos-1)*v.F.p0+(v.ypos-1/128)*v.F.p3+v.zpos*v.F.p6+(v.xbasepos*v.F.e0+(v.zbasepos-16/7)*v.F.e6)*v.scale);v.head_rotation_x=v.F.e6?math.atan2(0,-v.F.e6):math.atan2(-v.F.e8,v.F.e5);v.head_rotation_y=math.asin(-v.F.e0);v.head_rotation_z=v.F.e6?math.atan2(-v.F.e2,-v.F.e1):0;" wiki.fmbe.3d_blocks.anim2
+playanimation @e[tag=wiki:fmbe] animation.warden.move _ 0 "v.body_x_rot=v.F.p5||v.F.p3?math.atan2(v.F.p5,-v.F.p3):math.atan2(-v.F.p0,-v.F.p2);v.body_z_rot=v.F.p5||v.F.p3?math.atan2(-v.F.p1,v.F.p7):0;" wiki.fmbe.3d_blocks.anim3
+playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_body_rot_y=math.asin(-v.F.p4);" wiki.fmbe.3d_blocks.anim4`;
 
         // ---- 通用提示对话框 ----
         function showInfoDialog(title, message) {
@@ -1517,10 +1616,11 @@
 
                 let boneGroups = {};
                 let totalCubeCount = 0;
+                let planeCount = 0;
 
                 // ---- 预处理：检测2D平面（Y厚度为0且XZ不相等的平面） ----
                 {
-                    let planeCount = 0;
+                    planeCount = 0;
                     for (const bone of bones) {
                         for (const cube of bone.cubes) {
                             const [sx, sy, sz] = cube.size;
@@ -1536,6 +1636,7 @@
                     }
                     if (planeCount > 0) {
                         warnings += `检测到 ${planeCount} 个2D平面（Y厚度为0），已自动设置Y厚度为0.001\n`;
+                        warnings += `⚠️ 2D平面转换会产生 rotate 变量，ex公版需挂载「EX公版前置」才能正确解析（点击 ex公版 版本按钮可获取）；若你的前置不支持 rotate，可用 EX FMBE 模拟器的欧拉角转换小工具把 rotate 转为 rot。\n`;
                     }
                 }
 
@@ -1662,10 +1763,10 @@
                             const posWorld = [M[0], M[1], M[2]];
 
                             // 2. 构建不含base的M_temp，通过computeTransformMatrix得到局部线性变换
-                            //    注意：不传入全局旋转（0,0,0），因为2D平面的局部变换已包含所有方向信息
+                            //    （FMBE 引擎中 basepos 作用于线性变换之内，故需对线性矩阵求逆求解 base）
                             const M_temp = [
                                 0, 0, 0,              // px,py,pz=0
-                                params.rotatex, 0, params.rotatez,  // rx,ry,rz（局部旋转 = params的输出）
+                                params.rotatex, 0, params.rotatez,  // rx,ry,rz（局部旋转 = params 的输出）
                                 effScale,             // s
                                 effExtScale,          // es
                                 params.extend_xrot,   // ex
@@ -1674,26 +1775,36 @@
                             ];
                             const worldMat = computeTransformMatrix(M_temp, 0, 0, 0);
                             // 提取线性部分（左上3x3）
+                            // 注意：THREE 的 Matrix4.elements 按「列主序」存储，而 Matrix3.set() 按「行主序」接收参数，
+                            // 故必须按 e[0],e[4],e[8] | e[1],e[5],e[9] | e[2],e[6],e[10] 的次序填入，
+                            // 否则得到的是真实线性矩阵的转置，basepos 会整体错一个旋转/剪切因子（平面飞走）。
                             const e = worldMat.elements;
                             const linearMat = new THREE.Matrix3().set(
-                                e[0], e[1], e[2],
-                                e[4], e[5], e[6],
-                                e[8], e[9], e[10]
+                                e[0], e[4], e[8],
+                                e[1], e[5], e[9],
+                                e[2], e[6], e[10]
                             );
 
-                            // 3. 计算Blockbench坐标系下的偏移（不翻转X）
-                            //    baseVec由线性矩阵逆求解，然后通过M[10]=-baseVec.x实现FMBE X翻转
+                            // 3. 计算 Blockbench 坐标系下的偏移
                             const offsetBb = new THREE.Vector3(
                                 (finalCenter[0] - worldPivot[0]) / k,
                                 (finalCenter[1] - worldPivot[1]) / k,
                                 (finalCenter[2] - worldPivot[2]) / k
                             );
 
-                            // 4. 求解 base = linearMat^{-1} * offset
+                            // 4. 求解 base = linearMat^{-1} * (X取反后的 offset)
+                            //    关键修正：FMBE 的 X 取反必须作用在「偏移向量」上、且在「对线性矩阵求逆」之前。
+                            //    2D 薄片的线性矩阵是非对角的（含 extend_scale≈1e-4 的 Y 压扁 + extend 旋转），
+                            //    因此 X 取反与矩阵求逆不交换——若先求逆再取反（旧写法），Z>X 且含 cube pivot 时
+                            //    base 会整体错一个旋转/剪切因子，导致平面「飞到别处」。
+                            //    做法：先对 offsetBb 做 X 取反得到 offsetFlipped，再左乘 linearMatInv。
+                            //    2D 薄片在 Y 方向被压扁会使 baseVec.y 数值很大（≈ offset.y/es），这是正确表示——
+                            //    引擎侧会再用 es 压回，与 ex 版非2D分支对薄立方体除以 e_scale 同理，并非数值错误。
+                            //    此符号约定与 ex 版非2D分支 basepos 一致（X 取反、Y/Z 正向，且 ey=0/ey=90 统一）。
                             const linearMatInv = linearMat.clone().invert();
-                            const baseVec = offsetBb.clone().applyMatrix3(linearMatInv);
+                            const offsetFlipped = new THREE.Vector3(-offsetBb.x, offsetBb.y, offsetBb.z);
+                            const baseVec = offsetFlipped.applyMatrix3(linearMatInv);
 
-                            // 5. 填充M数组（与non-2D一致：offset用BB坐标，M[10]取反实现FMBE X翻转）
                             M[3] = params.rotatex;
                             M[4] = 0;
                             M[5] = params.rotatez;
@@ -1701,23 +1812,17 @@
                             M[7] = effExtScale;
                             M[8] = params.extend_xrot;
                             M[9] = params.extend_yrot;
-                            M[10] = -baseVec.x;
-                            M[11] = params.extend_yrot === 0 ? -baseVec.y : baseVec.y;
-                            M[12] =  baseVec.z;
+                            M[10] = baseVec.x;
+                            M[11] = baseVec.y;
+                            M[12] = baseVec.z;
 
-                            // 6. 计算ZXY rotate角度（从XZY→ZXY转换）
-                            const rx_rad = deg2rad(angles.rx);
-                            const ry_rad = deg2rad(angles.ry);
-                            const rz_rad = deg2rad(-angles.rz);
-                            const xzyMat = mulMat(makeRotY(ry_rad), mulMat(makeRotX(rx_rad), makeRotZ(rz_rad)));
-                            const rotateAngles = extractRotateFromMatrix(xzyMat);
                             const f = (v) => formatNum(v);
                             const cmdBody = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
                                 `v.xrot=${f(params.rotatex)}; v.yrot=${f(0)}; v.zrot=${f(params.rotatez)}; ` +
                                 `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
                                 `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
                                 `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
-                                ` v.rotatex=${f(rotateAngles.rotatex)}; v.rotatey=${f(rotateAngles.rotatey)}; v.rotatez=${f(rotateAngles.rotatez)};`;
+                                ` v.rotatex=${f(angles.rx)}; v.rotatey=${f(-angles.ry)}; v.rotatez=${f(angles.rz)};`;
                             const cubeDataCode = cmdBody;
 
                             // 调试信息已移除
@@ -1822,6 +1927,7 @@
                 }
 
                 if (warnings !== "") { errorMsgEl.textContent = warnings; errorMsgEl.style.display = "block"; }
+                else { errorMsgEl.style.display = "none"; }
                 outputTextEl.innerHTML = outputHTML;
 
                 let allCommandsFlat = [];
@@ -1944,6 +2050,51 @@
             URL.revokeObjectURL(url);
         });
 
+        // ---- 打开模拟器并自动导入 ----
+        const openSimBtn = document.getElementById('openSimBtn');
+        if (openSimBtn) {
+            openSimBtn.addEventListener('click', function() {
+                const allCode = outputTextEl.dataset.allCode || '';
+                if (!allCode) {
+                    showInfoDialog('提示', '没有可导出的命令，请先转换模型。');
+                    return;
+                }
+                // 编码为 URL 片段（base64url），模拟器加载时自动读取并导入
+                let b64 = '';
+                try {
+                    b64 = btoa(unescape(encodeURIComponent(allCode)))
+                        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                } catch (e) { b64 = ''; }
+                // 兜底：同时复制到剪贴板（防止浏览器拦截跳转或目标不支持自动导入）
+                try { navigator.clipboard.writeText(allCode); } catch (e) {}
+                // 跳转仅指向网页端模拟器（其代码已支持 #cmds= 自动导入）
+                const target = 'https://ex-fmbe-simulator.ora-san.org/' + '#cmds=' + b64;
+                const w = window.open(target, '_blank');
+                if (!w) {
+                    showInfoDialog('已复制，请手动打开',
+                        '浏览器拦截了自动跳转。转换命令已复制到剪贴板——请打开 FMBE 模拟器网页版，点击「导入命令」粘贴即可。');
+                } else {
+                    showInfoDialog('已跳转 ✅',
+                        '已在新标签页打开 FMBE 模拟器网页版并尝试自动导入指令（命令同时已复制到剪贴板作为兜底）。\n\n若网页版尚未部署自动导入支持，请点击「导入命令」手动粘贴。');
+                }
+            });
+        }
+
+        // ---- ex公版 版本说明对话框（含获取前置按钮） ----
+        function showVersionDialog() { versionDialog.classList.add('show'); }
+        function hideVersionDialog() { versionDialog.classList.remove('show'); }
+        versionGetPrefixBtn.addEventListener('click', function() {
+            try { navigator.clipboard.writeText(EX_PREFIX_BLOCK); } catch (e) {}
+            hideVersionDialog();
+            showInfoDialog('已复制 EX 公版前置',
+                'EX 公版前置（含 rotate 变量所需的旋转矩阵前置）已复制到剪贴板。\n\n' +
+                '如果你的前置不支持 rotate 变量，可用 EX FMBE 模拟器的欧拉角转换小工具把 rotate 转换为 rot。');
+        });
+        versionDialogClose.addEventListener('click', hideVersionDialog);
+        versionDialog.addEventListener('click', function(e) {
+            if (e.target === this) hideVersionDialog();
+        });
+
         // ---- 监听 JSON 输入变化 ----
         jsonInputEl.addEventListener("input", function() {
             const has = this.value.trim().length > 0;
@@ -2025,6 +2176,10 @@
                 this.classList.add('active');
                 currentVersion = Number(this.dataset.version);
                 console.log("已切换版本：", currentVersion);
+                // ex公版（data-version="0"）点击后弹出版本说明 + 获取前置按钮
+                if (this.dataset.version === "0") {
+                    showVersionDialog();
+                }
             });
         });
 
@@ -2083,7 +2238,7 @@
         // 公告内容（硬编码，修改此处即可）
         // =================================================================
         const announcementText = `APP端将在联网条件下强制更新
-当前最新版本：v.9.00
+当前最新版本：v.9.01
 普通版转换管线暂时移除，ex版将只支持公版转换`;
 
         // =================================================================
@@ -2091,6 +2246,11 @@
         // =================================================================
         const changelogData = [
             // ═══ 新版本加在这里（最上面 = 最新） ═══
+            {
+                date: '2026/8/7',
+                version: 'v.9.01',
+                desc: '修复2D平面的转换处理（修复cube pivot下平面飞走/basepos偏移）',
+            },
             {
                 date: '2026/7/19',
                 version: 'v.9.00',
@@ -2192,7 +2352,7 @@
 
 
 
-        console.log('BB转FMBE转换器 v.9.00 已加载');
+        console.log('BB转FMBE转换器 v.9.01 已加载');
     });
 </script>
 </body>
