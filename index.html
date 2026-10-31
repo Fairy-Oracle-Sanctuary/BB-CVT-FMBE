@@ -286,6 +286,37 @@
     box-shadow: none;
 }
 /* ---- 禁用样式结束 ---- */
+/* ---- 保留骨骼数据开关 ---- */
+.bone-data-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #e2e8f0;
+}
+.bone-data-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text-main);
+    cursor: pointer;
+    user-select: none;
+    transform: skewX(var(--skew-reverse));
+}
+.bone-data-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.bone-data-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    transform: skewX(var(--skew-reverse));
+    line-height: 1.5;
+}
+/* ---- 保留骨骼数据开关结束 ---- */
 .version-tooltip {
     position: absolute;
             left: 100%;
@@ -450,9 +481,14 @@
             min-height: 300px;
             max-height: 800px;
             overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+        }
+        .output-box > .bone-group,
+        .output-box > .cube-item {
+            margin-bottom: 16px;
+        }
+        .output-box > .bone-group:last-child,
+        .output-box > .cube-item:last-child {
+            margin-bottom: 0;
         }
         .output-title-header {
             font-size: 22px;
@@ -526,12 +562,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
+    min-height: 50px;
+    box-sizing: border-box;
     cursor: pointer;
     user-select: none;
     background: var(--card-dark-bg);
     transition: var(--transition-normal);
     border-radius: var(--border-radius-lg);
+    flex-shrink: 0;
 }
 .bone-group-header:hover {
     background: var(--card-dark-hover);
@@ -543,10 +582,21 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    margin-right: 12px;
+}
+.bone-group-header .bone-name > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
 }
 .bone-group-header .bone-name .toggle-icon {
     font-size: 14px;
     transition: transform 0.2s;
+    flex-shrink: 0;
 }
 .bone-group-header .bone-name .toggle-icon.open {
     transform: rotate(180deg);
@@ -555,6 +605,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 .bone-group-body {
     padding: 12px 16px 16px;
@@ -1010,8 +1061,8 @@
     <div class="card-hint">初始状态下<br>fmbe一立方米是bb多少个像素</div>
 </div>
 <div class="card">
-    <div class="card-header"><span class="icon">📋</span><span class="title">粘贴基岩版模型 JSON</span></div>
-    <div class="textarea-wrapper"><textarea class="textarea-box" id="jsonInput" placeholder="在这里粘贴Blockbench导出的基岩版模型JSON..."></textarea></div>
+    <div class="card-header"><span class="icon">📋</span><span class="title">粘贴基岩版模型实体 JSON</span></div>
+    <div class="textarea-wrapper"><textarea class="textarea-box" id="jsonInput" placeholder="在这里粘贴Blockbench导出的基岩版实体模型JSON..."></textarea></div>
     <div class="file-row"><button class="version-btn file-btn" id="uploadModelBtn"><span>📁 选择模型文件</span></button><input type="file" id="modelFileInput" accept=".json,application/json" style="display: none;"><span class="file-name" id="modelFileName">未选择文件</span></div>
     <div class="input-wrapper" id="prefixGroup" style="display: none; margin-top: 12px;"><input type="text" class="input-box" id="prefixInput" value=' execute  positioned ~-1.5~1~-0.5 run playanimation @e[x=~,z=~,y=~,dx=1,dy=0,dz=0] animation.player.attack.positions _ 0 " ' placeholder="自定义输出前缀"></div>
     <div class="input-wrapper" id="suffixGroup" style="display: none; margin-top: 12px;"><input type="text" class="input-box" id="suffixInput" value=" '方块编号：&&lt;&gt;'; &quot" placeholder="自定义输出后缀（&lt;&gt;将被替换为编号）"></div>
@@ -1023,6 +1074,13 @@
     <div class="version-group" id="versionGroup">
         <div class="version-btn active" data-version="0"><span>ex公版</span><div class="version-tooltip">未经过修改的<br>ex（高级版fmbe）<br>默认版本</div></div>
     </div>
+        <div class="bone-data-row">
+            <label class="bone-data-label">
+                <input type="checkbox" id="preserveBoneDataChk">
+                <span>🦴 保留骨骼数据（导出骨骼层级，供模拟器还原骨骼系统）</span>
+            </label>
+            <div class="bone-data-hint">勾选后每条命令附加骨骼标签，导入模拟器即还原骨骼层级。默认不勾，原导出格式不变。详细协议说明见下方「更新日志」。</div>
+        </div>
 </div>
 <!-- ===== 版本选择卡片结束 ===== -->
 <div class="main-btn-group"><button class="primary-btn" id="convertBtn"><span>转换</span></button></div>
@@ -1282,7 +1340,18 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
         }
 
         function escapeHTML(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
-        function safeBoneName(name) { return name.replace(/[^a-zA-Z0-9_]/g, '_'); }
+        // 骨骼名转安全标识符：保留 ASCII 字母/数字/下划线，其余字符（中文等）转为 _<码点HEX>，
+        // 保证唯一且互不冲突（旧实现把中文全替换成 '_'，导致"右腿/左腿"等不同骨骼生成相同
+        // t.<id>_px 全局变量 → 导入模拟器后互相覆盖 → 模型散架）。
+        function safeBoneName(name) {
+            let s = '';
+            for (const ch of name) {
+                const c = ch.codePointAt(0);
+                if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || ch === '_') s += ch;
+                else s += '_' + c.toString(16).toUpperCase();
+            }
+            return s || 'bone';
+        }
 
         // =================================================================
         // 角度转弧度
@@ -1614,6 +1683,130 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                 function getAncestors(b, self=true) { let list=[]; let cur=b; if(self) list.push(cur); while(cur.parent && boneMap[cur.parent]) { cur=boneMap[cur.parent]; list.push(cur); } return list; }
                 function getParentAncestors(b) { let list=[]; if(!b.parent) return list; let cur=boneMap[b.parent]; while(cur) { list.push(cur); cur=cur.parent?boneMap[cur.parent]:null; } return list; }
 
+                // ---- 世界旋转矩阵 -> FMBE 欧拉角（与模拟器 matrix2FMBEAngles 一致）----
+                function matrix2FMBEAngles(mat) {
+                    const r00 = mat[0][0], r01 = mat[0][1], r02 = mat[0][2];
+                    const r10 = mat[1][0], r11 = mat[1][1], r12 = mat[1][2];
+                    const r20 = mat[2][0], r21 = mat[2][1], r22 = mat[2][2];
+                    let rx = Math.asin(Math.min(Math.max(r21, -1), 1));
+                    let cosRx = Math.cos(rx);
+                    let ry, rz;
+                    if (Math.abs(cosRx) < 1e-6) {
+                        ry = Math.atan2(r02, r00);
+                        rz = 0;
+                    } else {
+                        ry = Math.atan2(-r20, r22);
+                        rz = Math.atan2(-r01, r11);
+                    }
+                    rx = normalizeTinyOffset(rad2deg(rx));
+                    ry = normalizeTinyOffset(rad2deg(ry));
+                    rz = normalizeTinyOffset(rad2deg(rz));
+                    return { rx, ry, rz };
+                }
+
+                // ---- 世界旋转矩阵 -> 模拟器 v.xrot/yrot/zrot 直接可用欧拉角 ----
+                // 关键修正：模拟器解码约定为 R = Ry(-v.yrot)·Rx(v.xrot)·Rz(-v.zrot)
+                // （computeTransformMatrix 的 localMat = matRy·matRx·matRz，
+                //   matRx=Rx(v.xrot)、matRy=Ry(-v.yrot)、matRz=Rz(-v.zrot)）。
+                // 因此必须解 mat = Ry(-ry)·Rx(rx)·Rz(-rz)，返回 {rx,ry,rz} 已是 v.xxx 空间的值，
+                // 写入时不要再取反。matrix2FMBEAngles 解的是 Rz·Rx·Ry 约定（多轴旋转会镜像），
+                // 仅用于骨骼链/局部旋转等内部中间量，不能用于最终输出。
+                function worldRotationToSimAngles(mat) {
+                    const r02 = mat[0][2], r12 = mat[1][2], r22 = mat[2][2];
+                    const r10 = mat[1][0], r11 = mat[1][1];
+                    const rx = Math.asin(Math.min(Math.max(-r12, -1), 1)); // sin(rx) = -r12
+                    const cosB = Math.cos(rx);
+                    let ry, rz;
+                    if (Math.abs(cosB) < 1e-6) {
+                        // 退化：rx = ±90°，ry/rz 耦合，固定 rz=0，从 r01/r00 解 -ry
+                        rz = 0;
+                        const sign = (-r12) > 0 ? 1 : -1; // rx=+90 时 sinB>0
+                        if (sign > 0) ry = -Math.atan2(mat[0][1], mat[0][0]);
+                        else          ry = -Math.atan2(-mat[0][1], mat[0][0]);
+                    } else {
+                        ry = -Math.atan2(r02, r22);   // -ry = atan2(r02, r22)
+                        rz = -Math.atan2(r10, r11);   // -rz = atan2(r10, r11)
+                    }
+                    return {
+                        rx: normalizeTinyOffset(rad2deg(rx)),
+                        ry: normalizeTinyOffset(rad2deg(ry)),
+                        rz: normalizeTinyOffset(rad2deg(rz))
+                    };
+                }
+
+                // ---- 最终旋转输出约定（2026-09-12 定版：与 v8.5 校准基线逐值一致）----
+                // v8.5 旧约定（matrix2FMBEAngles 解 Rz·Rx·Ry + 输出 (rx, -ry, rz)）是长年游戏内验证的基线：
+                // X/Y/Z 单轴全部正确（Z 单轴实际输出 F·R·F 共轭结果、X/Y 输出原矩阵——这是游戏侧的经验约定，
+                // 不对应任何一致的坐标系镜像，不可用统一共轭推广）。2026-09-12 曾尝试统一 X 镜像共轭
+                // （worldRotationToSimAngles(F·R·F)），导致 Y 轴骨骼与 v8.5 相反（用户实测"骨骼仍然错误"），已回退。
+                // 多轴组合为 v8.5 既有限制（未校准，保持原状）。
+                // matrix2FMBEAngles 仅留内部中间量；最终输出一律走 angles 的 (rx, -ry, rz)。
+                function finalSimAngles(mat) {
+                    const a = matrix2FMBEAngles(mat);
+                    return { rx: a.rx, ry: -a.ry, rz: a.rz };
+                }
+
+
+                // ---- 骨骼安全名与父链预计算 ----
+                const boneSafeName = {};
+                const boneParentChainSafe = {};
+                bones.forEach(b => { boneSafeName[b.name] = safeBoneName(b.name); });
+                bones.forEach(b => {
+                    const chain = [];
+                    let cur = b.parent ? boneMap[b.parent] : null;
+                    while (cur) { chain.push(boneSafeName[cur.name]); cur = cur.parent ? boneMap[cur.parent] : null; }
+                    boneParentChainSafe[b.name] = chain;
+                });
+                // ---- 保留骨骼数据（供模拟器还原骨骼系统）----
+                // 仅在勾选时激活；预计算每个骨骼的安全名与父骨骼链（直接父→根），
+                // 并在「该骨骼首个方块」处输出 bone 枢轴标签。原导出逻辑不受影响。
+                const preserveBoneDataChk = document.getElementById('preserveBoneDataChk');
+                const preserveBoneData = !!preserveBoneDataChk && preserveBoneDataChk.checked;
+
+                // 静态骨骼导出：直接输出「烘焙好的常量数值 + 骨骼识别标签」，不再使用 t.<骨骼>_ 运行时变量。
+                // 依据（与模拟器骨骼逻辑一致）：模拟器导入端只用常量 v.xpos/v.xrot 等烘焙进 M（方块实际变换），
+                // t. 变量不被 isConstantExpr 认作常量 → M 落到默认值 0 → 上一版散架/乱飞的根因。
+                // 骨骼文件夹本身不存数据，一切已烘焙进每个方块；故常量输出 + group:/parentbone:/bone: 标签
+                // 即等价于模拟器自身的静态骨骼导出。导入后 rigImportedBones 会基于正确世界坐标重绑骨骼骨架。
+                function buildBoneConstant(angles, M, is2D = false) {
+                    // angles 必须是 v8.5 校准约定（matrix2FMBEAngles + (rx,-ry,rz)）的产物，不再取反
+                    const f = v => formatNum(v);
+                    // 非2D：整条世界旋转烘焙进 xrot/yrot/zrot，rotate 置 0。
+                    // 2D 平面：xrot/yrot/zrot 必须是矩形局部参数（M[3..5]=params.rotatex/0/rotatez，
+                    // 引擎靠它们把基准四边形摆成水平矩形），世界旋转（骨骼链）走 rotate 通道——
+                    // 旧版把 simAng 写进 xrot、rotate 清零，平面朝向/姿态直接错（2D+骨骼散架根因）。
+                    const rotPart = is2D
+                        ? `v.xrot=${f(M[3])}; v.yrot=${f(M[4])}; v.zrot=${f(M[5])}; `
+                        : `v.xrot=${f(angles.rx)}; v.yrot=${f(angles.ry)}; v.zrot=${f(angles.rz)}; `;
+                    const rotatePart = is2D
+                        ? ` v.rotatex=${f(angles.rx)}; v.rotatey=${f(angles.ry)}; v.rotatez=${f(angles.rz)};`
+                        : ` v.rotatex=0; v.rotatey=0; v.rotatez=0;`;
+                    return `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                           rotPart +
+                           `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                           `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                           `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
+                           rotatePart;
+                }
+                const emittedBoneTags = new Set();
+                function buildBonePrefixForBone(bone) {
+                    if (!preserveBoneData) return '';
+                    const sName = boneSafeName[bone.name];
+                    let prefix = `'group:${sName}'; `;
+                    const chain = boneParentChainSafe[bone.name];
+                    if (chain.length) prefix += `'parentbone:${chain.join('>')}'; `;
+                    // 骨骼坐标标签：携带骨骼枢轴（世界坐标，模拟器约定：X取反、Y向上、/k），仅首个方块输出，避免冗余
+                    if (!emittedBoneTags.has(sName)) {
+                        emittedBoneTags.add(sName);
+                        const wp = applyChain(bone.bone_pivot, getAncestors(bone, true));
+                        if (wp[0] || wp[1] || wp[2]) {
+                            const px = formatNum(-wp[0] / k), py = formatNum(wp[1] / k), pz = formatNum(wp[2] / k);
+                            prefix += `'bone:${sName}=[${px},${py},${pz}]|[0,0,0]'; `;
+                        }
+                    }
+                    return prefix;
+                }
+
                 let boneGroups = {};
                 let totalCubeCount = 0;
                 let planeCount = 0;
@@ -1656,6 +1849,7 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                         if (sx <= EPS || sy < 0 || sz <= EPS) { warnings += `方块${cube_id}：尺寸必须为非负数，已跳过\n`; continue; }
 
                         const is2DPlane = cube._is2DPlane || false;
+                        const bonePrefix = buildBonePrefixForBone(bone);
                         const xzEqual = Math.abs(sx - sz) <= EPS;
                         const xyEqual = Math.abs(sx - sy) <= EPS;
                         const zyEqual = Math.abs(sz - sy) <= EPS;
@@ -1698,7 +1892,8 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                         if (Math.abs(e_scale)<EPS) { e_scale = MIN_E_SCALE; warnings+=`方块${cube_id}：该方块高度=0，已自动设为0.001\n`; }
 
                         // ---- 构建最终旋转矩阵 ----
-                        let finalRotMatrix;
+                        // 骨骼链矩阵（不含 cube 自身旋转）：与 cube 自身旋转复合成最终世界旋转
+                        let boneChainMatrix;
                         if (boneAncestors.length>0) {
                             let R = boneAncestors[0].rotMatrix;
                             for (let i=1; i<boneAncestors.length; i++) {
@@ -1707,37 +1902,21 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                                 for (let r=0; r<3; r++) for (let c=0; c<3; c++) newR[r][c] = parentR[r][0]*R[0][c] + parentR[r][1]*R[1][c] + parentR[r][2]*R[2][c];
                                 R = newR;
                             }
-                            if (cubeRotMatrix) {
-                                const newR = [[0,0,0],[0,0,0],[0,0,0]];
-                                for (let r=0; r<3; r++) for (let c=0; c<3; c++) newR[r][c] = R[r][0]*cubeRotMatrix[0][c] + R[r][1]*cubeRotMatrix[1][c] + R[r][2]*cubeRotMatrix[2][c];
-                                R = newR;
-                            }
-                            finalRotMatrix = R;
+                            boneChainMatrix = R;
                         } else {
-                            finalRotMatrix = cubeRotMatrix || [[1,0,0],[0,1,0],[0,0,1]];
+                            boneChainMatrix = [[1,0,0],[0,1,0],[0,0,1]];
                         }
-
-                        // ---- 提取角度 ----
-                        function matrix2FMBEAngles(mat) {
-                            const r00 = mat[0][0], r01 = mat[0][1], r02 = mat[0][2];
-                            const r10 = mat[1][0], r11 = mat[1][1], r12 = mat[1][2];
-                            const r20 = mat[2][0], r21 = mat[2][1], r22 = mat[2][2];
-                            let rx = Math.asin(Math.min(Math.max(r21, -1), 1));
-                            let cosRx = Math.cos(rx);
-                            let ry, rz;
-                            if (Math.abs(cosRx) < 1e-6) {
-                                ry = Math.atan2(r02, r00);
-                                rz = 0;
-                            } else {
-                                ry = Math.atan2(-r20, r22);
-                                rz = Math.atan2(-r01, r11);
-                            }
-                            rx = normalizeTinyOffset(rad2deg(rx));
-                            ry = normalizeTinyOffset(rad2deg(ry));
-                            rz = normalizeTinyOffset(rad2deg(rz));
-                            return { rx, ry, rz };
+                        // 最终旋转矩阵 = 骨骼链 ∘ cube 自身
+                        let finalRotMatrix;
+                        if (cubeRotMatrix) {
+                            const newR = [[0,0,0],[0,0,0],[0,0,0]];
+                            for (let r=0; r<3; r++) for (let c=0; c<3; c++) newR[r][c] = boneChainMatrix[r][0]*cubeRotMatrix[0][c] + boneChainMatrix[r][1]*cubeRotMatrix[1][c] + boneChainMatrix[r][2]*cubeRotMatrix[2][c];
+                            finalRotMatrix = newR;
+                        } else {
+                            finalRotMatrix = boneChainMatrix;
                         }
-                        const angles = matrix2FMBEAngles(finalRotMatrix);
+                        // 最终输出用的欧拉角：v8.5 校准约定 (rx, -ry, rz)
+                        const simAng = finalSimAngles(finalRotMatrix);
 
                         // ---- 构建 M 数组 [xpos, ypos, zpos, xrot, yrot, zrot, scale, extend_scale, extend_xrot, extend_yrot, xbasepos, ybasepos, zbasepos] ----
                         const M = new Array(13).fill(0);
@@ -1748,10 +1927,10 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                         M[1] =  worldPivot[1] / k;  // v.ypos
                         M[2] =  worldPivot[2] / k;  // v.zpos
 
-                        // rot (M[3..5])
-                        M[3] = angles.rx;            // v.xrot
-                        M[4] = -angles.ry;           // v.yrot
-                        M[5] = angles.rz;            // v.zrot
+                        // rot (M[3..5]) —— 用模拟器约定分解，确保多轴旋转不镜像
+                        M[3] = simAng.rx;            // v.xrot
+                        M[4] = simAng.ry;            // v.yrot
+                        M[5] = simAng.rz;            // v.zrot
 
                         // ---- 如果是2D平面，使用完整变换矩阵计算所有参数 ----
                         if (is2DPlane) {
@@ -1802,6 +1981,10 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                             //    引擎侧会再用 es 压回，与 ex 版非2D分支对薄立方体除以 e_scale 同理，并非数值错误。
                             //    此符号约定与 ex 版非2D分支 basepos 一致（X 取反、Y/Z 正向，且 ey=0/ey=90 统一）。
                             const linearMatInv = linearMat.clone().invert();
+                            // basepos 求解 = v8.5 原始公式（2026-09-12 定稿：用户确认 v8.5 的 2D 转换是正确的，
+                            // 严禁改动）。骨骼勾选与否【完全不影响】2D 方块的数值——文件夹只是标识符：
+                            // 每块加 'group:'/'parentbone:' 标签、首块即骨干，模拟器静态文件夹自身无数据、
+                            // 不需要任何特殊转换。X 取反必须作用在偏移向量上、且在求逆之前（v8.5 原注释见上）。
                             const offsetFlipped = new THREE.Vector3(-offsetBb.x, offsetBb.y, offsetBb.z);
                             const baseVec = offsetFlipped.applyMatrix3(linearMatInv);
 
@@ -1817,13 +2000,21 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                             M[12] = baseVec.z;
 
                             const f = (v) => formatNum(v);
-                            const cmdBody = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
-                                `v.xrot=${f(params.rotatex)}; v.yrot=${f(0)}; v.zrot=${f(params.rotatez)}; ` +
-                                `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
-                                `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
-                                `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
-                                ` v.rotatex=${f(angles.rx)}; v.rotatey=${f(-angles.ry)}; v.rotatez=${f(angles.rz)};`;
-                            const cubeDataCode = cmdBody;
+                            let cubeDataCode;
+                            if (preserveBoneData) {
+                                // 静态骨骼：输出烘焙常量（与模拟器静态骨骼导出对称）
+                                const boneBody = buildBoneConstant(simAng, M, true);
+                                cubeDataCode = bonePrefix + boneBody;
+                            } else {
+                                const cmdBody = `v.xpos=${f(M[0])}; v.ypos=${f(M[1])}; v.zpos=${f(M[2])}; ` +
+                                    `v.xrot=${f(params.rotatex)}; v.yrot=${f(0)}; v.zrot=${f(params.rotatez)}; ` +
+                                    `v.scale=${f(M[6])}; v.extend_scale=${f(M[7])}; ` +
+                                    `v.extend_xrot=${f(M[8])}; v.extend_yrot=${f(M[9])}; ` +
+                                    `v.xbasepos=${f(M[10])}; v.ybasepos=${f(M[11])}; v.zbasepos=${f(M[12])};` +
+                                    // rotate 通道 = 世界旋转（骨骼链∘cube自身），v8.5 校准约定 (rx,-ry,rz)。
+                                    ` v.rotatex=${f(simAng.rx)}; v.rotatey=${f(simAng.ry)}; v.rotatez=${f(simAng.rz)};`;
+                                cubeDataCode = bonePrefix + cmdBody;
+                            }
 
                             // 调试信息已移除
 
@@ -1884,7 +2075,15 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
                         }
 
                         // ---- 从 M 数组生成命令 ----
-                        const cubeDataCode = generateCommandFromM(M);
+                        // 保留骨骼数据：输出烘焙常量 + 骨骼标签（文件夹不存数据，一切烘焙进方块）
+                        let cubeDataCode;
+                        if (preserveBoneData) {
+                            const boneBody = buildBoneConstant(simAng, M);
+                            cubeDataCode = bonePrefix + boneBody;
+                        } else {
+                            const boneRotInit = preserveBoneData ? ' v.rotatex=0; v.rotatey=0; v.rotatez=0;' : '';
+                            cubeDataCode = bonePrefix + generateCommandFromM(M) + boneRotInit;
+                        }
                         const finalCommand = customPrefix.replace(/&<>/g, cube_id) + cubeDataCode + customSuffix.replace(/&<>/g, cube_id);
                         boneGroups[boneName].commands.push({ id: cube_id, command: finalCommand });
                     }
@@ -2238,14 +2437,27 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
         // 公告内容（硬编码，修改此处即可）
         // =================================================================
         const announcementText = `APP端将在联网条件下强制更新
-当前最新版本：v.9.01
-普通版转换管线暂时移除，ex版将只支持公版转换`;
+当前最新版本：v.9.02
+普通版转换管线已长期移除`;
 
         // =================================================================
         // 模块化更新日志（按日期从晚到早排列，新条目加在最前面）
         // =================================================================
         const changelogData = [
             // ═══ 新版本加在这里（最上面 = 最新） ═══
+            {
+                date: '2026/9/12',
+                version: 'v.9.02',
+                desc: '新增「保留骨骼数据」导出；完全移除骨骼动画导出',
+                btnText: '查看详情',
+                detail: '【保留骨骼数据】勾选后每条命令附加骨骼标签，并把方块输出为烘焙常量。\n'
+                    + "- 'group:骨骼名'; ：该方块所属骨骼（文件夹）\n"
+                    + "- 'parentbone:直接父>祖父>...'; ：父骨骼链（第一项=直接父）\n"
+                    + "- 'bone:名=[x,y,z]|[0,0,0]'; ：骨骼枢轴参考点（仅每骨骼首块输出，X取反、/k）\n"
+                    + '- 文件夹本身不存数据，其枢轴/旋转与骨干方块挂等号；每骨骼第一个方块即骨干\n'
+                    + '- 导入模拟器即自动还原骨骼层级。默认不勾，原导出格式不变。\n'
+                    + '【移除】「导出骨骼动画」功能已完全删除（动画JSON粘贴卡片与导出复选框）。',
+            },
             {
                 date: '2026/8/7',
                 version: 'v.9.01',
@@ -2352,7 +2564,7 @@ playanimation @e[tag=wiki:fmbe] animation.player.attack.rotations _ 0 "v.attack_
 
 
 
-        console.log('BB转FMBE转换器 v.9.01 已加载');
+        console.log('BB转FMBE转换器 v.9.02 已加载');
     });
 </script>
 </body>
